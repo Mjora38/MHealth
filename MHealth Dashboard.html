@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>MHealth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0d0f;
+  --bg2: #141417;
+  --bg3: #1c1c21;
+  --bg4: #242429;
+  --border: #2a2a31;
+  --text: #e8e8ec;
+  --text2: #9898a8;
+  --text3: #5a5a6a;
+  --accent: oklch(75% 0.2 145);
+  --accent-dim: oklch(75% 0.2 145 / 0.12);
+  --accent-border: oklch(75% 0.2 145 / 0.3);
+  --amber: oklch(75% 0.15 75);
+  --amber-dim: oklch(75% 0.15 75 / 0.12);
+  --red: oklch(68% 0.18 25);
+  --red-dim: oklch(68% 0.18 25 / 0.12);
+  --blue: oklch(68% 0.18 200);
+  --blue-dim: oklch(68% 0.18 200 / 0.12);
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --sidebar-w: 220px;
+  --nav-h: 64px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+#root { height: 100%; display: flex; }
+input, textarea, select, button { font-family: var(--font); }
+button { cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+input[type="range"] { padding: 0; height: 6px; cursor: pointer; }
+select option { background: var(--bg3); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── SIDEBAR (desktop) ── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0 24px;
+  flex-shrink: 0;
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  z-index: 100;
+}
+.sidebar-logo {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  padding: 0 24px 28px;
+  color: var(--accent);
+}
+.sidebar-logo span { color: var(--text); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; padding: 0 12px; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.sidebar-item:hover { color: var(--text); background: var(--bg3); }
+.sidebar-item.active { color: var(--accent); background: var(--accent-dim); }
+.sidebar-item svg { flex-shrink: 0; }
+.sidebar-date { padding: 16px 24px 0; font-size: 12px; color: var(--text3); font-family: var(--mono); }
+
+/* ── BOTTOM NAV (mobile) ── */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  z-index: 100;
+  padding-left: 8px; padding-right: 8px;
+  justify-content: space-around;
+  align-items: center;
+}
+.bottom-nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 10px; font-weight: 500;
+  color: var(--text3);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex: 1;
+  min-height: 44px;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav-item.active { color: var(--accent); }
+.bottom-nav-item svg { display: block; }
+
+/* ── MAIN CONTENT ── */
+.main {
+  flex: 1;
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.section {
+  flex: 1;
+  padding: 36px 40px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  animation: fadein 0.2s ease;
+}
+@keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── TYPOGRAPHY ── */
+.section-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+.section-subtitle { font-size: 13px; color: var(--text2); font-weight: 400; }
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 14px; }
+.row { display: flex; gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 40px;
+}
+.btn-primary { background: var(--accent); color: #0d0d0f; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:active { filter: brightness(0.95); }
+.btn-ghost { border-color: var(--border); color: var(--text2); }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger { border-color: var(--red-dim); color: var(--red); }
+.btn-danger:hover { background: var(--red-dim); }
+.btn-sm { padding: 7px 12px; font-size: 13px; min-height: 34px; }
+.btn-icon { padding: 8px; border-radius: var(--radius-sm); }
+
+/* ── TAGS / BADGES ── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 99px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+}
+.badge-green { background: var(--accent-dim); color: var(--accent); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-gray { background: var(--bg4); color: var(--text2); }
+
+/* ── TAB BAR ── */
+.tab-bar {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--bg3); padding: 4px; border-radius: 10px;
+  width: fit-content; overflow-x: auto;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-btn {
+  padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  transition: all 0.15s; cursor: pointer; white-space: nowrap;
+  border: 1px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-btn.active { background: var(--bg2); color: var(--text); border-color: var(--border); }
+.tab-btn:not(.active) { color: var(--text3); }
+
+/* ── FORM ── */
+.form-row { display: flex; gap: 10px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.form-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+/* ── CHART ── */
+.chart-wrap { position: relative; width: 100%; }
+svg.chart { overflow: visible; }
+
+/* ── MISC ── */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+.mono { font-family: var(--mono); }
+
+/* ── TABLET ── */
+@media (max-width: 1024px) and (min-width: 769px) {
+  :root { --sidebar-w: 180px; }
+  .section { padding: 28px 24px; }
+}
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .bottom-nav { display: flex; }
+  .main { margin-left: 0; padding-bottom: calc(var(--nav-h) + var(--safe-bottom)); }
+  .section { padding: 20px 16px; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
+  .form-row { flex-direction: column; }
+  .section-title { font-size: 22px; }
+  .card { padding: 16px; }
+  .tab-bar { max-width: 100%; }
+}
+@media (max-width: 360px) {
+  .section { padding: 16px 12px; }
+  .bottom-nav-item { padding: 6px 8px; font-size: 9px; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+// ─── Storage ──────────────────────────────────────────────────────────────
+const ls = {
+  get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+const TODAY = new Date().toISOString().split('T')[0];
+
+// ─── Icons ────────────────────────────────────────────────────────────────
+const Icon = ({ name, size = 20 }) => {
+  const icons = {
+    home: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 22V12h6v10"/></svg>,
+    gym: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="1" y="10" width="4" height="4" rx="1"/><rect x="19" y="10" width="4" height="4" rx="1"/><rect x="5" y="8" width="3" height="8" rx="1"/><rect x="16" y="8" width="3" height="8" rx="1"/><line x1="8" y1="12" x2="16" y2="12" strokeWidth="2"/></svg>,
+    dumbbell: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="1" y="10" width="4" height="4" rx="1"/><rect x="19" y="10" width="4" height="4" rx="1"/><rect x="5" y="8" width="3" height="8" rx="1"/><rect x="16" y="8" width="3" height="8" rx="1"/><line x1="8" y1="12" x2="16" y2="12" strokeWidth="2"/></svg>,
+    food: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>,
+    plan: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>,
+    progress: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+    plus: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>,
+    check: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
+    trash: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+    star: <svg width={size} height={size} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+    starEmpty: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+    fire: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M12 2c0 6-6 7-6 13a6 6 0 0012 0c0-4.5-2-8-2-13-1.5 2-2 4-4 4z"/></svg>,
+    close: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>,
+    weight: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><path d="M5 8h14l-2 13H7L5 8z"/></svg>,
+    chart: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+    edit: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ─── Quotes ───────────────────────────────────────────────────────────────
+const QUOTES = [
+  { text: "The only bad workout is the one that didn't happen.", author: "Unknown" },
+  { text: "Take care of your body. It's the only place you have to live.", author: "Jim Rohn" },
+  { text: "A year from now you'll wish you had started today.", author: "Karen Lamb" },
+  { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
+  { text: "Small steps in the right direction beat big steps in the wrong one.", author: "Unknown" },
+  { text: "Your body can stand almost anything. It's your mind you have to convince.", author: "Unknown" },
+  { text: "Don't wish for it. Work for it.", author: "Unknown" },
+  { text: "Discipline is the bridge between goals and accomplishment.", author: "Jim Rohn" },
+  { text: "Strive for progress, not perfection.", author: "Unknown" },
+  { text: "It never gets easier. You just get stronger.", author: "Unknown" },
+];
+
+// ─── Line Chart ───────────────────────────────────────────────────────────
+const LineChart = ({ data, color = 'var(--accent)', height = 120, label = '' }) => {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(500);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) setWidth(e.contentRect.width || 500);
+    });
+    ro.observe(ref.current);
+    setWidth(ref.current.offsetWidth || 500);
+    return () => ro.disconnect();
+  }, []);
+
+  if (!data || data.length < 2) return <div className="empty-state" style={{padding:'20px 0'}}>Not enough data yet</div>;
+
+  const vals = data.map(d => d.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const W = width, H = height;
+  const pad = 10;
+
+  const pts = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * (W - pad * 2) + pad;
+    const y = H - ((d.value - min) / range) * (H - pad * 2) - pad;
+    return [x, y];
+  });
+
+  const lineD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  const areaD = lineD + ` L${pts[pts.length-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
+  const gradId = `grad-${label.replace(/\s/g,'_')}`;
+
+  return (
+    <div className="chart-wrap" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart" style={{width:'100%',height:H,display:'block'}}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#${gradId})`} />
+        <path d={lineD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map(([x, y], i) => (
+          <g key={i}>
+            <circle cx={x} cy={y} r="5" fill={color} stroke="var(--bg2)" strokeWidth="2" />
+            <title>{`${data[i].date}: ${data[i].value}`}</title>
+          </g>
+        ))}
+      </svg>
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:6,fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>
+        <span>{data[0]?.date}</span>
+        <span>{data[data.length-1]?.date}</span>
+      </div>
+    </div>
+  );
+};
+
+// ─── Streak Ring ──────────────────────────────────────────────────────────
+const StreakRing = ({ streak }) => {
+  const r = 44, circ = 2 * Math.PI * r;
+  const pct = Math.min(streak / 30, 1);
+  return (
+    <div style={{position:'relative',width:110,height:110,flexShrink:0}}>
+      <svg width="110" height="110" viewBox="0 0 110 110" style={{transform:'rotate(-90deg)'}}>
+        <circle cx="55" cy="55" r={r} fill="none" stroke="var(--bg4)" strokeWidth="6" />
+        <circle cx="55" cy="55" r={r} fill="none" stroke="var(--accent)" strokeWidth="6"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round"
+          style={{transition:'stroke-dashoffset 1s ease', filter:'drop-shadow(0 0 6px var(--accent))'}} />
+      </svg>
+      <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+        <span style={{fontFamily:'var(--mono)',fontSize:26,fontWeight:500,lineHeight:1,color:'var(--accent)'}}>{streak}</span>
+        <span style={{fontSize:10,color:'var(--text3)',letterSpacing:'0.5px',marginTop:2}}>DAYS</span>
+      </div>
+    </div>
+  );
+};
+
+// ─── Modal ────────────────────────────────────────────────────────────────
+const Modal = ({ title, onClose, children }) => {
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:16}}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:16,padding:24,width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+          <span style={{fontSize:18,fontWeight:700}}>{title}</span>
+          <button className="btn btn-icon btn-ghost" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// ─── HOME ─────────────────────────────────────────────────────────────────
+const HomeSection = ({ allData }) => {
+  const quote = useMemo(() => QUOTES[new Date().getDate() % QUOTES.length], []);
+  const { tasks, meals, workoutSessions, activeDays } = allData;
+
+  const todayTasks = tasks.filter(t => t.date === TODAY).slice(0, 5);
+  const todayMeals = meals[TODAY] || {};
+  const todayWorkouts = workoutSessions.filter(w => w.date === TODAY);
+  const totalCals = Object.values(todayMeals).flat().reduce((s, m) => s + (m?.calories || 0), 0);
+  const hasMeals = ['breakfast','lunch','dinner','snacks'].some(s => todayMeals[s]?.length > 0);
+
+  const streak = useMemo(() => {
+    const days = [...new Set([...activeDays, TODAY])].sort().reverse();
+    let s = 0, prev = null;
+    for (const d of days) {
+      if (!prev) { s = 1; prev = d; continue; }
+      if (Math.round((new Date(prev) - new Date(d)) / 86400000) === 1) { s++; prev = d; } else break;
+    }
+    return s;
+  }, [activeDays]);
+
+  return (
+    <div className="section">
+      <div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:24}}>
+        <p style={{fontSize:15,fontWeight:500,color:'var(--text)',lineHeight:1.6,fontStyle:'italic'}}>"{quote.text}"</p>
+        <p style={{fontSize:12,color:'var(--accent)',marginTop:8,fontFamily:'var(--mono)'}}>— {quote.author}</p>
+      </div>
+
+      <div className="card" style={{display:'flex',alignItems:'center',gap:24,marginBottom:24,flexWrap:'wrap'}}>
+        <StreakRing streak={streak} />
+        <div>
+          <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>Current Streak</div>
+          <div style={{fontSize:22,fontWeight:700}}>{streak} day{streak !== 1 ? 's' : ''} 🔥</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:6,fontFamily:'var(--mono)'}}>{new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
+        </div>
+      </div>
+
+      <div className="grid-2" style={{gap:16}}>
+        <div className="card">
+          <div className="card-title">Today's Tasks</div>
+          {todayTasks.length === 0
+            ? <div style={{color:'var(--text3)',fontSize:13}}>No tasks for today</div>
+            : <div className="col" style={{gap:8}}>
+                {todayTasks.map(t => (
+                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:10,opacity:t.done?0.5:1}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,
+                      background:t.priority==='high'?'var(--red)':t.priority==='medium'?'var(--amber)':'var(--text3)'}} />
+                    <span style={{fontSize:13,textDecoration:t.done?'line-through':'none',flex:1}}>{t.text}</span>
+                  </div>
+                ))}
+              </div>}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Meals Today</div>
+          {!hasMeals
+            ? <div style={{color:'var(--text3)',fontSize:13}}>No meals logged</div>
+            : <div className="col" style={{gap:8}}>
+                {['breakfast','lunch','dinner','snacks'].filter(m => todayMeals[m]?.length > 0).map(slot => (
+                  <div key={slot} style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:12,color:'var(--text2)',textTransform:'capitalize'}}>{slot}</span>
+                    <span style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{todayMeals[slot].reduce((s,m)=>s+(m.calories||0),0)} kcal</span>
+                  </div>
+                ))}
+                <div className="divider" style={{margin:'6px 0'}} />
+                <div style={{display:'flex',justifyContent:'space-between'}}>
+                  <span style={{fontSize:13,fontWeight:600}}>Total</span>
+                  <span style={{fontSize:13,fontWeight:600,color:'var(--accent)',fontFamily:'var(--mono)'}}>{totalCals} kcal</span>
+                </div>
+              </div>}
+        </div>
+
+        <div className="card" style={{gridColumn:'1 / -1'}}>
+          <div className="card-title">Workout Today</div>
+          {todayWorkouts.length === 0
+            ? <div style={{color:'var(--text3)',fontSize:13}}>No workout logged today</div>
+            : <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {todayWorkouts.map(w => (
+                  <div key={w.id} style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 14px'}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{w.exercise}</div>
+                    <div style={{fontSize:11,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:2}}>{w.sets}×{w.reps} @ {w.weight}kg</div>
+                  </div>
+                ))}
+              </div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── GYM ──────────────────────────────────────────────────────────────────
+const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWorkoutSessions, markActive }) => {
+  const [tab, setTab] = useState('log');
+  const [showSchemaModal, setShowSchemaModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [newSchema, setNewSchema] = useState({ name: '', exercises: '' });
+  const [logForm, setLogForm] = useState({ exercise: '', sets: '', reps: '', weight: '', date: TODAY });
+  const [chartExercise, setChartExercise] = useState('');
+
+  const exercises = useMemo(() => [...new Set(workoutSessions.map(w => w.exercise))].sort(), [workoutSessions]);
+
+  const chartData = useMemo(() => {
+    if (!chartExercise) return [];
+    return workoutSessions
+      .filter(w => w.exercise === chartExercise)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(w => ({ date: w.date.slice(5), value: parseFloat(w.weight) || 0 }));
+  }, [workoutSessions, chartExercise]);
+
+  const addSchema = () => {
+    if (!newSchema.name.trim()) return;
+    const s = { id: Date.now(), name: newSchema.name.trim(), exercises: newSchema.exercises.split(',').map(e => e.trim()).filter(Boolean) };
+    setWorkoutSchemas(prev => { const n = [...prev, s]; ls.set('workoutSchemas', n); return n; });
+    setNewSchema({ name: '', exercises: '' });
+    setShowSchemaModal(false);
+  };
+
+  const deleteSchema = id => setWorkoutSchemas(prev => { const n = prev.filter(s => s.id !== id); ls.set('workoutSchemas', n); return n; });
+
+  const logWorkout = () => {
+    if (!logForm.exercise.trim()) return;
+    const w = { id: Date.now(), ...logForm, exercise: logForm.exercise.trim() };
+    setWorkoutSessions(prev => { const n = [...prev, w]; ls.set('workoutSessions', n); return n; });
+    markActive(logForm.date);
+    setLogForm({ exercise: '', sets: '', reps: '', weight: '', date: TODAY });
+    setShowLogModal(false);
+  };
+
+  const deleteSession = id => setWorkoutSessions(prev => { const n = prev.filter(s => s.id !== id); ls.set('workoutSessions', n); return n; });
+
+  const groupedByDate = useMemo(() => {
+    const dates = [...new Set(workoutSessions.map(w => w.date))].sort().reverse();
+    return dates.map(date => ({ date, sessions: workoutSessions.filter(w => w.date === date) }));
+  }, [workoutSessions]);
+
+  return (
+    <div className="section">
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+        <div className="section-title">Gym</div>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowLogModal(true)}><Icon name="plus" size={15}/>Log Workout</button>
+      </div>
+
+      <div className="tab-bar">
+        {[['log','Log'],['schemas','Schemas'],['progress','Progress']].map(([id, label]) => (
+          <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'log' && (
+        <div className="col">
+          {groupedByDate.length === 0 && <div className="empty-state">No workouts logged yet. Hit "Log Workout" to start!</div>}
+          {groupedByDate.map(({ date, sessions }) => (
+            <div key={date} className="card">
+              <div className="card-title">{new Date(date + 'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>
+              <div className="col" style={{gap:8}}>
+                {sessions.map(w => (
+                  <div key={w.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:500}}>{w.exercise}</div>
+                      <div style={{fontSize:12,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:1}}>{w.sets} sets × {w.reps} reps @ {w.weight} kg</div>
+                    </div>
+                    <button className="btn btn-icon btn-danger" onClick={() => deleteSession(w.id)} aria-label="Delete"><Icon name="trash" size={15}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'schemas' && (
+        <div className="col">
+          <button className="btn btn-ghost" style={{width:'fit-content'}} onClick={() => setShowSchemaModal(true)}><Icon name="plus" size={16}/>New Schema</button>
+          {workoutSchemas.length === 0 && <div className="empty-state">Create workout schemas like Push / Pull / Legs to plan your sessions</div>}
+          <div className="grid-2">
+            {workoutSchemas.map(s => (
+              <div key={s.id} className="card">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
+                  <div style={{fontSize:16,fontWeight:700}}>{s.name}</div>
+                  <button className="btn btn-icon btn-danger" onClick={() => deleteSchema(s.id)} aria-label="Delete"><Icon name="trash" size={15}/></button>
+                </div>
+                {s.exercises.length === 0
+                  ? <div style={{fontSize:12,color:'var(--text3)'}}>No exercises listed</div>
+                  : <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                      {s.exercises.map((e, i) => <span key={i} className="badge badge-gray">{e}</span>)}
+                    </div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'progress' && (
+        <div className="col">
+          <div className="card">
+            <div className="card-title">Exercise Progress</div>
+            {exercises.length === 0
+              ? <div className="empty-state">Log workouts to track your strength progress</div>
+              : <>
+                  <select value={chartExercise} onChange={e => setChartExercise(e.target.value)} style={{marginBottom:20}}>
+                    <option value="">— Select exercise —</option>
+                    {exercises.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  {chartExercise && <>
+                    <LineChart data={chartData} label={chartExercise} />
+                    <div style={{fontSize:11,color:'var(--text3)',marginTop:8,textAlign:'center',fontFamily:'var(--mono)'}}>Weight (kg) over time</div>
+                  </>}
+                </>}
+          </div>
+        </div>
+      )}
+
+      {showSchemaModal && (
+        <Modal title="New Workout Schema" onClose={() => setShowSchemaModal(false)}>
+          <div className="col">
+            <div className="form-group">
+              <label className="form-label">Schema Name</label>
+              <input value={newSchema.name} onChange={e => setNewSchema(p=>({...p,name:e.target.value}))} placeholder="e.g. Push Day" autoFocus onKeyDown={e=>e.key==='Enter'&&addSchema()} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Exercises (comma-separated)</label>
+              <input value={newSchema.exercises} onChange={e => setNewSchema(p=>({...p,exercises:e.target.value}))} placeholder="Bench Press, Shoulder Press, Triceps" onKeyDown={e=>e.key==='Enter'&&addSchema()} />
+            </div>
+            <button className="btn btn-primary" onClick={addSchema}>Save Schema</button>
+          </div>
+        </Modal>
+      )}
+
+      {showLogModal && (
+        <Modal title="Log Workout" onClose={() => setShowLogModal(false)}>
+          <div className="col">
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Exercise</label>
+                <input value={logForm.exercise} onChange={e => setLogForm(p=>({...p,exercise:e.target.value}))} placeholder="Bench Press" list="ex-list" autoFocus />
+                <datalist id="ex-list">{exercises.map(e => <option key={e} value={e} />)}</datalist>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date</label>
+                <input type="date" value={logForm.date} onChange={e => setLogForm(p=>({...p,date:e.target.value}))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Sets</label>
+                <input type="number" min="1" value={logForm.sets} onChange={e => setLogForm(p=>({...p,sets:e.target.value}))} placeholder="3" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Reps</label>
+                <input type="number" min="1" value={logForm.reps} onChange={e => setLogForm(p=>({...p,reps:e.target.value}))} placeholder="8" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Weight (kg)</label>
+                <input type="number" min="0" step="0.5" value={logForm.weight} onChange={e => setLogForm(p=>({...p,weight:e.target.value}))} placeholder="80" />
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={logWorkout}>Log Workout</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── FOOD ─────────────────────────────────────────────────────────────────
+const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, markActive }) => {
+  const [selectedDate, setSelectedDate] = useState(TODAY);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addSlot, setAddSlot] = useState('breakfast');
+  const [mealForm, setMealForm] = useState({ name: '', calories: '' });
+  const [tab, setTab] = useState('plan');
+
+  const SLOTS = ['breakfast','lunch','dinner','snacks'];
+  const dayMeals = meals[selectedDate] || {};
+  const totalCals = SLOTS.reduce((s, slot) => s + (dayMeals[slot] || []).reduce((a, m) => a + (m.calories || 0), 0), 0);
+
+  const openAdd = slot => { setAddSlot(slot); setMealForm({ name: '', calories: '' }); setShowAddModal(true); };
+
+  const addMeal = () => {
+    if (!mealForm.name.trim()) return;
+    const m = { id: Date.now(), name: mealForm.name.trim(), calories: parseInt(mealForm.calories) || 0 };
+    setMeals(prev => {
+      const day = prev[selectedDate] || {};
+      const updated = { ...prev, [selectedDate]: { ...day, [addSlot]: [...(day[addSlot] || []), m] } };
+      ls.set('meals', updated); return updated;
+    });
+    markActive(selectedDate);
+    setShowAddModal(false);
+  };
+
+  const removeMeal = (slot, id) => setMeals(prev => {
+    const day = prev[selectedDate] || {};
+    const updated = { ...prev, [selectedDate]: { ...day, [slot]: (day[slot] || []).filter(m => m.id !== id) } };
+    ls.set('meals', updated); return updated;
+  });
+
+  const saveFav = meal => {
+    if (favMeals.find(f => f.name === meal.name)) return;
+    setFavMeals(prev => { const n = [...prev, { ...meal, id: Date.now() }]; ls.set('favMeals', n); return n; });
+  };
+
+  const addFavToSlot = (fav, slot) => setMeals(prev => {
+    const day = prev[selectedDate] || {};
+    const m = { ...fav, id: Date.now() };
+    const updated = { ...prev, [selectedDate]: { ...day, [slot]: [...(day[slot] || []), m] } };
+    ls.set('meals', updated); return updated;
+  });
+
+  const deleteFav = id => setFavMeals(prev => { const n = prev.filter(f => f.id !== id); ls.set('favMeals', n); return n; });
+
+  const slotIcon = { breakfast: '☀️', lunch: '🌤️', dinner: '🌙', snacks: '🍎' };
+
+  return (
+    <div className="section">
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+        <div className="section-title">Food</div>
+        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{width:'auto',fontSize:13}} />
+      </div>
+
+      <div className="tab-bar">
+        {[['plan','Meal Plan'],['favorites','Favorites']].map(([id, label]) => (
+          <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'plan' && (
+        <div className="col">
+          <div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:12,padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <span style={{fontSize:13,color:'var(--text2)'}}>Daily Total</span>
+            <span style={{fontSize:24,fontWeight:700,color:'var(--accent)',fontFamily:'var(--mono)'}}>{totalCals} <span style={{fontSize:14}}>kcal</span></span>
+          </div>
+
+          {SLOTS.map(slot => {
+            const items = dayMeals[slot] || [];
+            const slotCals = items.reduce((s, m) => s + (m.calories || 0), 0);
+            return (
+              <div key={slot} className="card">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:16}}>{slotIcon[slot]}</span>
+                    <div className="card-title" style={{marginBottom:0,textTransform:'capitalize'}}>{slot}</div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <span style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{slotCals} kcal</span>
+                    <button className="btn btn-icon btn-ghost btn-sm" onClick={() => openAdd(slot)} aria-label={`Add to ${slot}`}><Icon name="plus" size={14}/></button>
+                  </div>
+                </div>
+                {items.length === 0
+                  ? <div style={{fontSize:12,color:'var(--text3)'}}>No items — tap + to add</div>
+                  : <div className="col" style={{gap:8}}>
+                      {items.map(m => (
+                        <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                          <span style={{fontSize:13,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</span>
+                          <span style={{fontSize:12,color:'var(--text2)',fontFamily:'var(--mono)',flexShrink:0}}>{m.calories} kcal</span>
+                          <button className="btn btn-icon" style={{color:'var(--amber)',padding:4,flexShrink:0}} title="Save as favorite" onClick={() => saveFav(m)}><Icon name="starEmpty" size={13}/></button>
+                          <button className="btn btn-icon btn-danger" style={{padding:4,flexShrink:0}} onClick={() => removeMeal(slot, m.id)} aria-label="Remove"><Icon name="close" size={13}/></button>
+                        </div>
+                      ))}
+                    </div>}
+
+                {favMeals.length > 0 && (
+                  <div style={{marginTop:12,display:'flex',flexWrap:'wrap',gap:6}}>
+                    {favMeals.map(f => (
+                      <button key={f.id} onClick={() => addFavToSlot(f, slot)}
+                        style={{fontSize:11,padding:'4px 10px',borderRadius:99,border:'1px dashed var(--border)',color:'var(--text3)',cursor:'pointer',background:'none',transition:'color 0.15s'}}
+                        onMouseOver={e=>e.currentTarget.style.color='var(--accent)'}
+                        onMouseOut={e=>e.currentTarget.style.color='var(--text3)'}>
+                        + {f.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === 'favorites' && (
+        <div className="col">
+          {favMeals.length === 0
+            ? <div className="empty-state">No favorites yet — tap ☆ on any meal to save it here</div>
+            : <div className="grid-2">
+                {favMeals.map(f => (
+                  <div key={f.id} className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</div>
+                      <div style={{fontSize:12,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:2}}>{f.calories} kcal</div>
+                    </div>
+                    <button className="btn btn-icon btn-danger" style={{flexShrink:0}} onClick={() => deleteFav(f.id)} aria-label="Delete"><Icon name="trash" size={15}/></button>
+                  </div>
+                ))}
+              </div>}
+        </div>
+      )}
+
+      {showAddModal && (
+        <Modal title={`Add to ${addSlot}`} onClose={() => setShowAddModal(false)}>
+          <div className="col">
+            <div className="form-group">
+              <label className="form-label">Meal name</label>
+              <input value={mealForm.name} onChange={e => setMealForm(p=>({...p,name:e.target.value}))} placeholder="Chicken & rice" autoFocus onKeyDown={e=>e.key==='Enter'&&addMeal()} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Calories</label>
+              <input type="number" min="0" value={mealForm.calories} onChange={e => setMealForm(p=>({...p,calories:e.target.value}))} placeholder="450" onKeyDown={e=>e.key==='Enter'&&addMeal()} />
+            </div>
+            <button className="btn btn-primary" onClick={addMeal}>Add Meal</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── PLANNING ─────────────────────────────────────────────────────────────
+const PlanningSection = ({ tasks, setTasks, markActive }) => {
+  const [tab, setTab] = useState('today');
+  const [selectedDate, setSelectedDate] = useState(TODAY);
+  const [form, setForm] = useState({ text: '', priority: 'medium', date: TODAY });
+  const [showModal, setShowModal] = useState(false);
+
+  const todayTasks = tasks
+    .filter(t => t.date === selectedDate)
+    .sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] - { high: 0, medium: 1, low: 2 }[b.priority]));
+
+  const doneCount = todayTasks.filter(t => t.done).length;
+
+  const addTask = () => {
+    if (!form.text.trim()) return;
+    const t = { id: Date.now(), text: form.text.trim(), priority: form.priority, date: form.date, done: false };
+    setTasks(prev => { const n = [...prev, t]; ls.set('tasks', n); return n; });
+    markActive(form.date);
+    setForm({ text: '', priority: 'medium', date: TODAY });
+    setShowModal(false);
+  };
+
+  const toggleDone = id => setTasks(prev => { const n = prev.map(t => t.id === id ? {...t, done: !t.done} : t); ls.set('tasks', n); return n; });
+  const deleteTask = id => setTasks(prev => { const n = prev.filter(t => t.id !== id); ls.set('tasks', n); return n; });
+
+  const weekStart = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d; }, []);
+  const weekDays = useMemo(() => Array.from({length:7}, (_, i) => {
+    const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+    return d.toISOString().split('T')[0];
+  }), [weekStart]);
+
+  const priorityClass = p => p === 'high' ? 'badge-red' : p === 'medium' ? 'badge-amber' : 'badge-gray';
+  const priorityColor = p => p === 'high' ? 'var(--red)' : p === 'medium' ? 'var(--amber)' : 'var(--text3)';
+
+  return (
+    <div className="section">
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+        <div className="section-title">Planning</div>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Icon name="plus" size={15}/>Add Task</button>
+      </div>
+
+      <div className="tab-bar">
+        {[['today','Daily'],['week','Weekly']].map(([id, label]) => (
+          <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'today' && (
+        <div className="col">
+          <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{width:'auto',fontSize:13}} />
+            {todayTasks.length > 0 && (
+              <span style={{fontSize:12,color:'var(--text3)'}}>
+                {doneCount}/{todayTasks.length} done
+                {doneCount === todayTasks.length && todayTasks.length > 0 && ' 🎉'}
+              </span>
+            )}
+          </div>
+          {todayTasks.length === 0
+            ? <div className="empty-state">No tasks for this day — add one above!</div>
+            : <div className="col" style={{gap:8}}>
+                {todayTasks.map(t => (
+                  <div key={t.id} className="card" style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',opacity:t.done?0.6:1,transition:'opacity 0.2s'}}>
+                    <button
+                      onClick={() => toggleDone(t.id)}
+                      aria-label={t.done ? 'Mark undone' : 'Mark done'}
+                      style={{width:22,height:22,borderRadius:6,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                        border:`2px solid ${t.done?'var(--accent)':'var(--border)'}`,
+                        background:t.done?'var(--accent)':'transparent',
+                        transition:'all 0.15s',cursor:'pointer'}}>
+                      {t.done && <Icon name="check" size={12} />}
+                    </button>
+                    <span style={{flex:1,fontSize:14,textDecoration:t.done?'line-through':'none',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.text}</span>
+                    <span className={`badge ${priorityClass(t.priority)}`} style={{flexShrink:0}}>{t.priority}</span>
+                    <button className="btn btn-icon btn-danger" onClick={() => deleteTask(t.id)} aria-label="Delete task"><Icon name="trash" size={14}/></button>
+                  </div>
+                ))}
+              </div>}
+        </div>
+      )}
+
+      {tab === 'week' && (
+        <div className="col">
+          {weekDays.map(date => {
+            const dayTasks = tasks.filter(t => t.date === date);
+            const dayName = new Date(date + 'T12:00').toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric'});
+            const isToday = date === TODAY;
+            return (
+              <div key={date} className="card" style={{borderColor:isToday?'var(--accent-border)':'var(--border)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:dayTasks.length?8:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:isToday?'var(--accent)':'var(--text)'}}>
+                    {dayName}{isToday && <span style={{color:'var(--text3)',fontWeight:400}}> · today</span>}
+                  </div>
+                  <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>{dayTasks.filter(t=>t.done).length}/{dayTasks.length}</span>
+                </div>
+                {dayTasks.length === 0
+                  ? <div style={{fontSize:12,color:'var(--text3)'}}>—</div>
+                  : <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {dayTasks.map(t => (
+                        <div key={t.id} style={{display:'flex',alignItems:'center',gap:8}}>
+                          <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:priorityColor(t.priority)}} />
+                          <span style={{fontSize:12,flex:1,textDecoration:t.done?'line-through':'none',color:t.done?'var(--text3)':'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.text}</span>
+                        </div>
+                      ))}
+                    </div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showModal && (
+        <Modal title="Add Task" onClose={() => setShowModal(false)}>
+          <div className="col">
+            <div className="form-group">
+              <label className="form-label">Task</label>
+              <input value={form.text} onChange={e => setForm(p=>({...p,text:e.target.value}))} placeholder="What do you need to do?" autoFocus onKeyDown={e => e.key === 'Enter' && addTask()} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Priority</label>
+                <select value={form.priority} onChange={e => setForm(p=>({...p,priority:e.target.value}))}>
+                  <option value="high">🔴 High</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="low">⚪ Low</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date</label>
+                <input type="date" value={form.date} onChange={e => setForm(p=>({...p,date:e.target.value}))} />
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={addTask}>Add Task</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── PROGRESS ─────────────────────────────────────────────────────────────
+const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, markActive }) => {
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [weightForm, setWeightForm] = useState({ date: TODAY, weight: '' });
+  const [checkForm, setCheckForm] = useState({ date: TODAY, energy: 5, mood: 5, notes: '' });
+
+  const addWeight = () => {
+    if (!weightForm.weight) return;
+    const w = { id: Date.now(), date: weightForm.date, value: parseFloat(weightForm.weight) };
+    setWeightLogs(prev => {
+      const n = [...prev.filter(x => x.date !== weightForm.date), w].sort((a,b) => a.date.localeCompare(b.date));
+      ls.set('weightLogs', n); return n;
+    });
+    markActive(weightForm.date);
+    setWeightForm({ date: TODAY, weight: '' });
+    setShowWeightModal(false);
+  };
+
+  const addCheckIn = () => {
+    const c = { id: Date.now(), ...checkForm };
+    setCheckIns(prev => {
+      const n = [...prev.filter(x => x.date !== checkForm.date), c].sort((a,b) => a.date.localeCompare(b.date));
+      ls.set('checkIns', n); return n;
+    });
+    markActive(checkForm.date);
+    setCheckForm({ date: TODAY, energy: 5, mood: 5, notes: '' });
+    setShowCheckInModal(false);
+  };
+
+  const deleteWeight = id => setWeightLogs(prev => { const n = prev.filter(w => w.id !== id); ls.set('weightLogs', n); return n; });
+  const deleteCheckIn = id => setCheckIns(prev => { const n = prev.filter(c => c.id !== id); ls.set('checkIns', n); return n; });
+
+  const weightChartData = weightLogs.map(w => ({ date: w.date.slice(5), value: w.value }));
+  const moodChartData = checkIns.map(c => ({ date: c.date.slice(5), value: c.mood }));
+  const energyChartData = checkIns.map(c => ({ date: c.date.slice(5), value: c.energy }));
+
+  const latestWeight = weightLogs[weightLogs.length - 1];
+  const latestCheckIn = checkIns[checkIns.length - 1];
+
+  const weightDelta = weightLogs.length >= 2
+    ? (weightLogs[weightLogs.length - 1].value - weightLogs[weightLogs.length - 2].value).toFixed(1)
+    : null;
+
+  return (
+    <div className="section">
+      <div className="section-title" style={{marginBottom:24}}>Progress</div>
+
+      <div className="grid-2" style={{marginBottom:16}}>
+        <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div style={{minWidth:0}}>
+            <div className="card-title">Current Weight</div>
+            <div style={{fontSize:28,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>
+              {latestWeight ? `${latestWeight.value} kg` : '—'}
+            </div>
+            {weightDelta !== null && (
+              <div style={{fontSize:11,color:parseFloat(weightDelta)<0?'var(--accent)':'var(--red)',marginTop:2,fontFamily:'var(--mono)'}}>
+                {parseFloat(weightDelta) > 0 ? '+' : ''}{weightDelta} kg from last
+              </div>
+            )}
+            {latestWeight && <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{latestWeight.date}</div>}
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowWeightModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
+        </div>
+
+        <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div style={{minWidth:0}}>
+            <div className="card-title">Last Check-in</div>
+            {latestCheckIn
+              ? <div style={{display:'flex',gap:16,marginTop:4}}>
+                  <div>
+                    <div style={{fontSize:11,color:'var(--text3)'}}>Mood</div>
+                    <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--amber)'}}>{latestCheckIn.mood}<span style={{fontSize:13}}>/10</span></div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:11,color:'var(--text3)'}}>Energy</div>
+                    <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{latestCheckIn.energy}<span style={{fontSize:13}}>/10</span></div>
+                  </div>
+                </div>
+              : <div style={{color:'var(--text3)',fontSize:13,marginTop:4}}>No check-in yet</div>}
+            {latestCheckIn && <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{latestCheckIn.date}</div>}
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowCheckInModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
+        </div>
+      </div>
+
+      <div className="col">
+        <div className="card">
+          <div className="card-title">Weight Over Time</div>
+          <LineChart data={weightChartData} label="weight" />
+        </div>
+
+        <div className="grid-2">
+          <div className="card">
+            <div className="card-title">Mood</div>
+            <LineChart data={moodChartData} color="var(--amber)" height={90} label="mood" />
+          </div>
+          <div className="card">
+            <div className="card-title">Energy</div>
+            <LineChart data={energyChartData} color="var(--blue)" height={90} label="energy" />
+          </div>
+        </div>
+
+        {/* Weight log history */}
+        {weightLogs.length > 0 && (
+          <div className="card">
+            <div className="card-title">Weight Log</div>
+            <div className="col" style={{gap:6}}>
+              {[...weightLogs].reverse().slice(0, 8).map(w => (
+                <div key={w.id} style={{display:'flex',alignItems:'center',gap:12,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',minWidth:80}}>{w.date}</div>
+                  <div style={{flex:1,fontSize:14,fontWeight:600,fontFamily:'var(--mono)',color:'var(--accent)'}}>{w.value} kg</div>
+                  <button className="btn btn-icon btn-danger" style={{padding:4}} onClick={() => deleteWeight(w.id)} aria-label="Delete"><Icon name="trash" size={13}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Check-in history */}
+        {checkIns.length > 0 && (
+          <div className="card">
+            <div className="card-title">Check-in History</div>
+            <div className="col" style={{gap:6}}>
+              {[...checkIns].reverse().slice(0, 6).map(c => (
+                <div key={c.id} style={{display:'flex',alignItems:'center',gap:12,padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',minWidth:80}}>{c.date}</div>
+                  <div style={{fontSize:12}}>Mood <span style={{color:'var(--amber)',fontWeight:600}}>{c.mood}/10</span></div>
+                  <div style={{fontSize:12}}>Energy <span style={{color:'var(--accent)',fontWeight:600}}>{c.energy}/10</span></div>
+                  {c.notes && <div style={{fontSize:12,color:'var(--text2)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.notes}>{c.notes}</div>}
+                  <button className="btn btn-icon btn-danger" style={{padding:4,flexShrink:0}} onClick={() => deleteCheckIn(c.id)} aria-label="Delete"><Icon name="trash" size={13}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showWeightModal && (
+        <Modal title="Log Weight" onClose={() => setShowWeightModal(false)}>
+          <div className="col">
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Weight (kg)</label>
+                <input type="number" min="0" step="0.1" value={weightForm.weight} onChange={e => setWeightForm(p=>({...p,weight:e.target.value}))} placeholder="75.5" autoFocus onKeyDown={e=>e.key==='Enter'&&addWeight()} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date</label>
+                <input type="date" value={weightForm.date} onChange={e => setWeightForm(p=>({...p,date:e.target.value}))} />
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={addWeight}>Save Weight</button>
+          </div>
+        </Modal>
+      )}
+
+      {showCheckInModal && (
+        <Modal title="Weekly Check-in" onClose={() => setShowCheckInModal(false)}>
+          <div className="col">
+            <div className="form-group">
+              <label className="form-label">Date</label>
+              <input type="date" value={checkForm.date} onChange={e => setCheckForm(p=>({...p,date:e.target.value}))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Energy Level — <span style={{color:'var(--accent)',fontFamily:'var(--mono)'}}>{checkForm.energy}/10</span></label>
+              <input type="range" min="1" max="10" value={checkForm.energy} onChange={e => setCheckForm(p=>({...p,energy:parseInt(e.target.value)}))}
+                style={{background:'var(--bg4)',accentColor:'var(--accent)',width:'100%'}} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mood — <span style={{color:'var(--amber)',fontFamily:'var(--mono)'}}>{checkForm.mood}/10</span></label>
+              <input type="range" min="1" max="10" value={checkForm.mood} onChange={e => setCheckForm(p=>({...p,mood:parseInt(e.target.value)}))}
+                style={{background:'var(--bg4)',accentColor:'var(--amber)',width:'100%'}} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <textarea value={checkForm.notes} onChange={e => setCheckForm(p=>({...p,notes:e.target.value}))} rows={3} placeholder="How was your week? How are you feeling?" />
+            </div>
+            <button className="btn btn-primary" onClick={addCheckIn}>Save Check-in</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ─── APP ROOT ─────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { id: 'home',     label: 'Home',     icon: 'home' },
+  { id: 'gym',      label: 'Gym',      icon: 'dumbbell' },
+  { id: 'food',     label: 'Food',     icon: 'food' },
+  { id: 'plan',     label: 'Plan',     icon: 'plan' },
+  { id: 'progress', label: 'Progress', icon: 'progress' },
+];
+
+const App = () => {
+  const [activeSection, setActiveSection] = useState('home');
+
+  const [workoutSchemas,  setWorkoutSchemas]  = useState(() => ls.get('workoutSchemas', []));
+  const [workoutSessions, setWorkoutSessions] = useState(() => ls.get('workoutSessions', []));
+  const [meals,           setMeals]           = useState(() => ls.get('meals', {}));
+  const [favMeals,        setFavMeals]        = useState(() => ls.get('favMeals', []));
+  const [tasks,           setTasks]           = useState(() => ls.get('tasks', []));
+  const [weightLogs,      setWeightLogs]      = useState(() => ls.get('weightLogs', []));
+  const [checkIns,        setCheckIns]        = useState(() => ls.get('checkIns', []));
+  const [activeDays,      setActiveDays]      = useState(() => ls.get('activeDays', []));
+
+  const markActive = useCallback(date => {
+    setActiveDays(prev => {
+      if (prev.includes(date)) return prev;
+      const n = [...prev, date];
+      ls.set('activeDays', n);
+      return n;
+    });
+  }, []);
+
+  const allData = { tasks, meals, workoutSessions, activeDays };
+
+  const navigate = section => {
+    setActiveSection(section);
+    document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case 'home':     return <HomeSection allData={allData} />;
+      case 'gym':      return <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} markActive={markActive} />;
+      case 'food':     return <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} markActive={markActive} />;
+      case 'plan':     return <PlanningSection tasks={tasks} setTasks={setTasks} markActive={markActive} />;
+      case 'progress': return <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive} />;
+      default:         return null;
+    }
+  };
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="sidebar" role="navigation" aria-label="Main navigation">
+        <div className="sidebar-logo">M<span>Health</span></div>
+        <nav className="sidebar-nav">
+          {NAV_ITEMS.map(item => (
+            <div key={item.id}
+              className={`sidebar-item ${activeSection === item.id ? 'active' : ''}`}
+              onClick={() => navigate(item.id)}
+              role="button"
+              tabIndex={0}
+              aria-label={item.label}
+              aria-current={activeSection === item.id ? 'page' : undefined}
+              onKeyDown={e => e.key === 'Enter' && navigate(item.id)}>
+              <Icon name={item.icon} size={18} />
+              {item.label}
+            </div>
+          ))}
+        </nav>
+        <div className="sidebar-date">{new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+      </aside>
+
+      {/* Main content */}
+      <main className="main" id="main-content">
+        {renderSection()}
+      </main>
+
+      {/* Mobile bottom nav */}
+      <nav className="bottom-nav" aria-label="Bottom navigation">
+        {NAV_ITEMS.map(item => (
+          <div key={item.id}
+            className={`bottom-nav-item ${activeSection === item.id ? 'active' : ''}`}
+            onClick={() => navigate(item.id)}
+            role="button"
+            tabIndex={0}
+            aria-label={item.label}
+            aria-current={activeSection === item.id ? 'page' : undefined}
+            onKeyDown={e => e.key === 'Enter' && navigate(item.id)}>
+            <Icon name={item.icon} size={22} />
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </nav>
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
