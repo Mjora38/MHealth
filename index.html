@@ -1450,7 +1450,7 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
             <label className="form-label">Food name</label>
             <FoodSearch value={mealForm.name}
               onChange={name=>setMealForm(p=>({...p,name}))}
-              onSelect={(name,cal,p,c,f)=>setMealForm(p=>({...p,name,calories:cal,protein:p,carbs:c,fat:f}))}
+              onSelect={(name,cal,pro,car,fat)=>setMealForm(prev=>({...prev,name,calories:cal,protein:pro,carbs:car,fat}))}
               onKeyDown={e=>e.key==='Enter'&&addMeal()} autoFocus/>
           </div>
           <div className="form-group">
