@@ -96,6 +96,8 @@ select option { background: var(--bg3); }
 .chart-wrap { position: relative; width: 100%; }
 svg.chart { overflow: visible; }
 .mobile-account { display: none; }
+.fav-chip { font-size:11px; padding:4px 10px; border-radius:99px; border:1px dashed var(--border); color:var(--text3); cursor:pointer; background:none; transition:color 0.15s; white-space:nowrap; flex-shrink:0; }
+.fav-chip:hover { color: var(--accent); }
 
 /* TABLET */
 @media (max-width: 1024px) and (min-width: 769px) { :root { --sidebar-w: 180px; } .section { padding: 28px 24px; } }
@@ -517,7 +519,7 @@ const Modal = ({ title, onClose, children }) => {
 
 // ── HOME ───────────────────────────────────────────────────────────────────
 const HomeSection = ({ allData, signOut, userEmail }) => {
-  const quote = useMemo(()=>QUOTES[new Date().getDate()%QUOTES.length],[]);
+  const quote = QUOTES[new Date().getDate()%QUOTES.length];
   const { tasks, meals, workoutSessions, activeDays } = allData;
   const todayTasks = tasks.filter(t=>t.date===TODAY).slice(0,5);
   const todayMeals = meals[TODAY]||{};
@@ -794,7 +796,8 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
   // PR map: exercise → { weight, date }
   const prMap = useMemo(()=>{
     const m = {};
-    workoutSessions.forEach(s=>{
+    // Sort ascending so first occurrence of a given weight (earliest date) wins
+    [...workoutSessions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(s=>{
       const w = parseFloat(s.weight)||0;
       if (!m[s.exercise] || w > m[s.exercise].weight)
         m[s.exercise] = { weight: w, date: s.date, id: s.id };
@@ -873,7 +876,7 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
   const detectPR = (exercise, weight) => {
     const prev = workoutSessions.filter(s=>s.exercise===exercise);
     const prevMax = prev.reduce((m,s)=>Math.max(m,parseFloat(s.weight)||0),0);
-    return prev.length > 0 && (parseFloat(weight)||0) > prevMax;
+    return (parseFloat(weight)||0) > prevMax && (parseFloat(weight)||0) > 0;
   };
 
   const logWorkout=()=>{
@@ -1234,7 +1237,13 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
   const waterToday = waterLogs[selectedDate] || 0;
   const WATER_GOAL = 8;
   const addWater    = () => setWaterLogs(prev=>{const n={...prev,[selectedDate]:Math.min((prev[selectedDate]||0)+1,20)};save('waterLogs',n);return n;});
-  const removeWater = () => setWaterLogs(prev=>{const cur=prev[selectedDate]||0;if(!cur)return prev;const n={...prev,[selectedDate]:cur-1};save('waterLogs',n);return n;});
+  const removeWater = () => setWaterLogs(prev=>{
+    const cur=prev[selectedDate]||0; if(!cur)return prev;
+    const next=cur-1;
+    const n={...prev};
+    if(next===0) delete n[selectedDate]; else n[selectedDate]=next;
+    save('waterLogs',n); return n;
+  });
 
   // 7-day calorie history for Stats tab
   const calHistory = useMemo(() => {
@@ -1246,6 +1255,16 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
       return {date:date.slice(5),value:cal,full:date};
     });
   },[meals]);
+
+  const weeklyAvg = useMemo(()=>{
+    const days=calHistory.filter(d=>d.value>0);
+    if(!days.length)return null;
+    const avgCal=Math.round(days.reduce((_,d)=>_+d.value,0)/days.length);
+    const avgP=Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.protein||0),0);},0)/days.length);
+    const avgC=Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.carbs||0),0);},0)/days.length);
+    const avgF=Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.fat||0),0);},0)/days.length);
+    return {avgCal,avgP,avgC,avgF};
+  },[calHistory,meals]);
 
   const openAdd = slot => { setAddSlot(slot); setMealForm({name:'',calories:'',protein:'',carbs:'',fat:''}); setShowAddModal(true); };
 
@@ -1377,10 +1396,7 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
               </>}
 
               {favMeals.length>0&&<div style={{marginTop:12,display:'flex',flexWrap:'wrap',gap:6}}>
-                {favMeals.map(f=><button key={f.id} onClick={()=>addFavToSlot(f,slot)}
-                  style={{fontSize:11,padding:'4px 10px',borderRadius:99,border:'1px dashed var(--border)',color:'var(--text3)',cursor:'pointer',background:'none',transition:'color 0.15s'}}
-                  onMouseOver={e=>e.currentTarget.style.color='var(--accent)'}
-                  onMouseOut={e=>e.currentTarget.style.color='var(--text3)'}>+ {f.name}</button>)}
+                {favMeals.map(f=><button key={f.id} className="fav-chip" onClick={()=>addFavToSlot(f,slot)}>+ {f.name}</button>)}
               </div>}
             </div>
           );
@@ -1399,27 +1415,20 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
         </div>
 
         {/* Macro weekly averages */}
-        {calHistory.some(d=>d.value>0)&&(()=>{
-          const days = calHistory.filter(d=>d.value>0);
-          const avgP = Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.protein||0),0);},0)/days.length);
-          const avgC = Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.carbs||0),0);},0)/days.length);
-          const avgF = Math.round(days.reduce((_,d)=>{const dm=meals[d.full]||{};return _+SLOTS.flatMap(s=>dm[s]||[]).reduce((s,m)=>s+(m.fat||0),0);},0)/days.length);
-          const avgCal=Math.round(days.reduce((_,d)=>_+d.value,0)/days.length);
-          return (
-            <div className="card">
-              <div className="card-title">Weekly Average</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-                {[['Calories','var(--accent)',`${avgCal} kcal`],['Protein','var(--blue)',`${avgP}g`],['Carbs','var(--amber)',`${avgC}g`],['Fat','var(--red)',`${avgF}g`]].map(([label,color,val])=>(
-                  <div key={label} style={{background:'var(--bg3)',borderRadius:8,padding:'12px 14px'}}>
-                    <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>{label}</div>
-                    <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color}}>{val}</div>
-                  </div>
-                ))}
-              </div>
-              <MacroBar protein={avgP} carbs={avgC} fat={avgF}/>
+        {weeklyAvg&&(
+          <div className="card">
+            <div className="card-title">Weekly Average</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+              {[['Calories','var(--accent)',`${weeklyAvg.avgCal} kcal`],['Protein','var(--blue)',`${weeklyAvg.avgP}g`],['Carbs','var(--amber)',`${weeklyAvg.avgC}g`],['Fat','var(--red)',`${weeklyAvg.avgF}g`]].map(([label,color,val])=>(
+                <div key={label} style={{background:'var(--bg3)',borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>{label}</div>
+                  <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color}}>{val}</div>
+                </div>
+              ))}
             </div>
-          );
-        })()}
+            <MacroBar protein={weeklyAvg.avgP} carbs={weeklyAvg.avgC} fat={weeklyAvg.avgF}/>
+          </div>
+        )}
       </div>}
 
       {tab==='favorites'&&<div className="col">
@@ -1870,6 +1879,14 @@ const App = () => {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [applyCloud]);
+
+  // Reload at midnight so TODAY constant stays correct
+  useEffect(() => {
+    const now = new Date();
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5).getTime() - now.getTime();
+    const t = setTimeout(() => window.location.reload(), msUntilMidnight);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     db.auth.getSession().then(({ data: { session } }) => {
