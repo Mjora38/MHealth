@@ -162,7 +162,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React;
 // ── Storage ────────────────────────────────────────────────────────────────
 let _uid = null;
 
-const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs','customExercises','calorieGoal','waterLogs'];
+const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs','customExercises','calorieGoal','waterLogs','futurePlans'];
 
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
@@ -1552,8 +1552,29 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
   );
 };
 
+// ── ICS parser ────────────────────────────────────────────────────────────
+const parseICS = text => {
+  const events = [];
+  const blocks = text.split(/BEGIN:VEVENT/i).slice(1);
+  for (const block of blocks) {
+    const get = key => {
+      const m = block.match(new RegExp(`^${key}[^:\\r\\n]*:(.+)$`, 'im'));
+      return m ? m[1].trim().replace(/\\n/g,'\n').replace(/\\,/g,',').replace(/\\;/g,';') : '';
+    };
+    const summary = get('SUMMARY');
+    if (!summary) continue;
+    const dtstart = get('DTSTART');
+    let date = null;
+    const dm = dtstart.match(/(\d{4})(\d{2})(\d{2})/);
+    if (dm) date = `${dm[1]}-${dm[2]}-${dm[3]}`;
+    const description = get('DESCRIPTION');
+    events.push({ summary, date, description });
+  }
+  return events;
+};
+
 // ── PLANNING ──────────────────────────────────────────────────────────────
-const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHabitLogs, markActive }) => {
+const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHabitLogs, futurePlans, setFuturePlans, markActive }) => {
   const [tab, setTab] = useState('calendar');
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(TODAY);
@@ -1561,6 +1582,13 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [taskForm, setTaskForm] = useState({ text:'', priority:'medium' });
   const [habitForm, setHabitForm] = useState('');
+  // Future plans
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planForm, setPlanForm] = useState({ title:'', notes:'', targetDate:'', priority:'medium' });
+  const [planFilter, setPlanFilter] = useState('active'); // 'active' | 'done' | 'all'
+  // ICS import
+  const icsInputRef = useRef(null);
+  const [importPreview, setImportPreview] = useState(null); // [{summary,date,description,selected}]
 
   // Calendar grid
   const year = calMonth.getFullYear();
@@ -1604,6 +1632,56 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
     const n = {...prev, [TODAY]: updated}; save('habitLogs',n); return n;
   });
 
+  // Future plans handlers
+  const addPlan = () => {
+    if (!planForm.title.trim()) return;
+    const p = { id:Date.now(), title:planForm.title.trim(), notes:planForm.notes.trim(), targetDate:planForm.targetDate, priority:planForm.priority, done:false };
+    setFuturePlans(prev => { const n=[...prev,p]; save('futurePlans',n); return n; });
+    setPlanForm({ title:'', notes:'', targetDate:'', priority:'medium' });
+    setShowPlanModal(false);
+  };
+  const togglePlan = id => setFuturePlans(prev => { const n=prev.map(p=>p.id===id?{...p,done:!p.done}:p); save('futurePlans',n); return n; });
+  const deletePlan = id => setFuturePlans(prev => { const n=prev.filter(p=>p.id!==id); save('futurePlans',n); return n; });
+
+  const visiblePlans = futurePlans
+    .filter(p => planFilter==='all' ? true : planFilter==='done' ? p.done : !p.done)
+    .sort((a,b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.targetDate && b.targetDate) return a.targetDate.localeCompare(b.targetDate);
+      if (a.targetDate) return -1;
+      if (b.targetDate) return 1;
+      return ({high:0,medium:1,low:2}[a.priority] - {high:0,medium:1,low:2}[b.priority]);
+    });
+
+  // ICS import handlers
+  const handleICSFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const events = parseICS(ev.target.result);
+      if (!events.length) { alert('No events found in this file.'); return; }
+      setImportPreview(events.map(ev => ({...ev, selected: true})));
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const confirmImport = () => {
+    if (!importPreview) return;
+    const toImport = importPreview.filter(e => e.selected);
+    const newTasks = toImport.map(e => ({
+      id: Date.now() + Math.random(),
+      text: e.summary,
+      priority: 'medium',
+      date: e.date || TODAY,
+      done: false,
+      notes: e.description || '',
+    }));
+    setTasks(prev => { const n=[...prev,...newTasks]; save('tasks',n); return n; });
+    setImportPreview(null);
+  };
+
   const pColor = p => p==='high'?'var(--red)':p==='medium'?'var(--amber)':'var(--text3)';
   const pClass = p => p==='high'?'badge-red':p==='medium'?'badge-amber':'badge-gray';
 
@@ -1611,12 +1689,19 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
     <div className="section">
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
         <div className="section-title">Planning</div>
-        {tab==='calendar' && <button className="btn btn-primary btn-sm" onClick={()=>{setTaskForm({text:'',priority:'medium'});setShowTaskModal(true);}}><Icon name="plus" size={15}/>Add Task</button>}
-        {tab==='habits'   && <button className="btn btn-primary btn-sm" onClick={()=>setShowHabitModal(true)}><Icon name="plus" size={15}/>Add Habit</button>}
+        <div style={{display:'flex',gap:8}}>
+          {tab==='calendar' && <>
+            <button className="btn btn-ghost btn-sm" onClick={()=>icsInputRef.current?.click()}>📅 Import .ics</button>
+            <input ref={icsInputRef} type="file" accept=".ics" style={{display:'none'}} onChange={handleICSFile}/>
+            <button className="btn btn-primary btn-sm" onClick={()=>{setTaskForm({text:'',priority:'medium'});setShowTaskModal(true);}}><Icon name="plus" size={15}/>Add Task</button>
+          </>}
+          {tab==='habits'  && <button className="btn btn-primary btn-sm" onClick={()=>setShowHabitModal(true)}><Icon name="plus" size={15}/>Add Habit</button>}
+          {tab==='future'  && <button className="btn btn-primary btn-sm" onClick={()=>{setPlanForm({title:'',notes:'',targetDate:'',priority:'medium'});setShowPlanModal(true);}}><Icon name="plus" size={15}/>Add Plan</button>}
+        </div>
       </div>
 
       <div className="tab-bar">
-        {[['calendar','Calendar'],['habits','Daily Habits']].map(([id,label])=>(
+        {[['calendar','Calendar'],['habits','Daily Habits'],['future','Future Plans']].map(([id,label])=>(
           <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>
         ))}
       </div>
@@ -1724,6 +1809,47 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
             </div>}
       </div>}
 
+      {/* ── FUTURE PLANS ── */}
+      {tab==='future' && <div className="col">
+        {/* Filter chips */}
+        <div style={{display:'flex',gap:6}}>
+          {[['active','Active'],['done','Done'],['all','All']].map(([id,label])=>(
+            <button key={id} onClick={()=>setPlanFilter(id)}
+              style={{padding:'5px 14px',borderRadius:99,fontSize:12,fontWeight:500,cursor:'pointer',transition:'all 0.15s',
+                border:`1px solid ${planFilter===id?'var(--accent)':'var(--border)'}`,
+                background:planFilter===id?'var(--accent-dim)':'transparent',
+                color:planFilter===id?'var(--accent)':'var(--text2)'}}>
+              {label} {id==='active'?`(${futurePlans.filter(p=>!p.done).length})`:id==='done'?`(${futurePlans.filter(p=>p.done).length})`:`(${futurePlans.length})`}
+            </button>
+          ))}
+        </div>
+
+        {visiblePlans.length===0
+          ? <div className="empty-state">{futurePlans.length===0?'No future plans yet.\nAdd goals, dreams, or things you want to do someday.':'Nothing here.'}</div>
+          : <div className="col" style={{gap:10}}>
+              {visiblePlans.map(p=>(
+                <div key={p.id} className="card" style={{opacity:p.done?0.6:1,transition:'opacity 0.2s',borderColor:p.done?'var(--border)':p.priority==='high'?'var(--red-dim)':p.priority==='medium'?'var(--amber-dim)':'var(--border)'}}>
+                  <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+                    <button onClick={()=>togglePlan(p.id)} style={{width:22,height:22,borderRadius:6,flexShrink:0,marginTop:2,display:'flex',alignItems:'center',justifyContent:'center',
+                      border:`2px solid ${p.done?'var(--accent)':'var(--border)'}`,background:p.done?'var(--accent)':'transparent',transition:'all 0.15s',cursor:'pointer'}}>
+                      {p.done&&<Icon name="check" size={12}/>}
+                    </button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:600,textDecoration:p.done?'line-through':'none',marginBottom:p.notes?4:0}}>{p.title}</div>
+                      {p.notes&&<div style={{fontSize:12,color:'var(--text2)',lineHeight:1.5}}>{p.notes}</div>}
+                      <div style={{display:'flex',gap:8,marginTop:8,flexWrap:'wrap',alignItems:'center'}}>
+                        <span className={`badge ${pClass(p.priority)}`}>{p.priority}</span>
+                        {p.targetDate&&<span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>🎯 {new Date(p.targetDate+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>}
+                      </div>
+                    </div>
+                    <button className="btn btn-icon btn-danger" style={{flexShrink:0}} onClick={()=>deletePlan(p.id)}><Icon name="trash" size={14}/></button>
+                  </div>
+                </div>
+              ))}
+            </div>}
+      </div>}
+
+      {/* ── MODALS ── */}
       {showTaskModal && (
         <Modal title={`Add task — ${new Date(selectedDate+'T12:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}`} onClose={()=>setShowTaskModal(false)}>
           <div className="col">
@@ -1744,6 +1870,63 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
             <div className="form-group"><label className="form-label">What do you want to do every day?</label>
               <input value={habitForm} onChange={e=>setHabitForm(e.target.value)} placeholder="e.g. Drink 8 glasses of water" autoFocus onKeyDown={e=>e.key==='Enter'&&addHabit()}/></div>
             <button className="btn btn-primary" onClick={addHabit}>Add Habit</button>
+          </div>
+        </Modal>
+      )}
+
+      {showPlanModal && (
+        <Modal title="Add Future Plan" onClose={()=>setShowPlanModal(false)}>
+          <div className="col">
+            <div className="form-group"><label className="form-label">Title</label>
+              <input value={planForm.title} onChange={e=>setPlanForm(p=>({...p,title:e.target.value}))} placeholder="e.g. Run a marathon" autoFocus onKeyDown={e=>e.key==='Enter'&&addPlan()}/></div>
+            <div className="form-group"><label className="form-label">Notes (optional)</label>
+              <textarea value={planForm.notes} onChange={e=>setPlanForm(p=>({...p,notes:e.target.value}))} rows={2} placeholder="Any details or steps…"/></div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">Target Date (optional)</label>
+                <input type="date" value={planForm.targetDate} onChange={e=>setPlanForm(p=>({...p,targetDate:e.target.value}))}/></div>
+              <div className="form-group"><label className="form-label">Priority</label>
+                <select value={planForm.priority} onChange={e=>setPlanForm(p=>({...p,priority:e.target.value}))}>
+                  <option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">⚪ Low</option>
+                </select></div>
+            </div>
+            <button className="btn btn-primary" onClick={addPlan}>Add Plan</button>
+          </div>
+        </Modal>
+      )}
+
+      {importPreview && (
+        <Modal title={`Import ${importPreview.length} events`} onClose={()=>setImportPreview(null)}>
+          <div className="col">
+            <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>
+              Select which events to import as tasks. Events without a date will be added to today.
+            </div>
+            <div style={{display:'flex',gap:8,marginBottom:4}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setImportPreview(p=>p.map(e=>({...e,selected:true})))}>Select all</button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setImportPreview(p=>p.map(e=>({...e,selected:false})))}>Deselect all</button>
+            </div>
+            <div className="col" style={{gap:6,maxHeight:320,overflowY:'auto'}}>
+              {importPreview.map((ev,i)=>(
+                <div key={i} onClick={()=>setImportPreview(p=>p.map((e,j)=>j===i?{...e,selected:!e.selected}:e))}
+                  style={{display:'flex',alignItems:'flex-start',gap:10,padding:'10px 12px',borderRadius:8,cursor:'pointer',
+                    background:ev.selected?'var(--accent-dim)':'var(--bg3)',
+                    border:`1px solid ${ev.selected?'var(--accent-border)':'var(--border)'}`,transition:'all 0.12s'}}>
+                  <div style={{width:18,height:18,borderRadius:4,flexShrink:0,marginTop:1,display:'flex',alignItems:'center',justifyContent:'center',
+                    border:`2px solid ${ev.selected?'var(--accent)':'var(--border)'}`,background:ev.selected?'var(--accent)':'transparent'}}>
+                    {ev.selected&&<Icon name="check" size={11}/>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{ev.summary}</div>
+                    <div style={{fontSize:11,color:'var(--text3)',marginTop:2,fontFamily:'var(--mono)'}}>
+                      {ev.date ? new Date(ev.date+'T12:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : 'No date → added to today'}
+                    </div>
+                    {ev.description&&<div style={{fontSize:11,color:'var(--text2)',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.description}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn btn-primary" onClick={confirmImport} disabled={!importPreview.some(e=>e.selected)}>
+              Import {importPreview.filter(e=>e.selected).length} events as tasks
+            </button>
           </div>
         </Modal>
       )}
@@ -1879,6 +2062,7 @@ const App = () => {
   const [customExercises,  setCustomExercises]  = useState(()=>ls.get('customExercises',[]));
   const [calorieGoal,      setCalorieGoal]      = useState(()=>ls.get('calorieGoal',0));
   const [waterLogs,        setWaterLogs]        = useState(()=>ls.get('waterLogs',{}));
+  const [futurePlans,      setFuturePlans]      = useState(()=>ls.get('futurePlans',[]));
 
   const applyCloud = useCallback(cloud => {
     if (!cloud) return;
@@ -1896,6 +2080,7 @@ const App = () => {
     apply('customExercises',  setCustomExercises);
     apply('calorieGoal',      setCalorieGoal);
     apply('waterLogs',        setWaterLogs);
+    apply('futurePlans',      setFuturePlans);
   }, []);
 
   const handleAuth = useCallback(async user => {
@@ -1978,7 +2163,7 @@ const App = () => {
         {activeSection==='home'     && <HomeSection allData={allData} signOut={signOut} userEmail={user?.email}/>}
         {activeSection==='gym'      && <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} customExercises={customExercises} setCustomExercises={setCustomExercises} markActive={markActive}/>}
         {activeSection==='food'     && <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} calorieGoal={calorieGoal} setCalorieGoal={setCalorieGoal} waterLogs={waterLogs} setWaterLogs={setWaterLogs} markActive={markActive}/>}
-        {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} markActive={markActive}/>}
+        {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} futurePlans={futurePlans} setFuturePlans={setFuturePlans} markActive={markActive}/>}
         {activeSection==='progress' && <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive}/>}
       </main>
 
