@@ -109,10 +109,41 @@ svg.chart { overflow: visible; }
   .grid-2 { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; }
   .section-title { font-size: 22px; }
-  .card { padding: 16px; }
+  .card { padding: 14px; }
   .mobile-account { display: flex; }
+
+  /* Prevent iOS Safari from zooming in when tapping inputs */
+  input, textarea, select { font-size: 16px !important; }
+
+  /* Tab bar stretches full width so labels never overflow */
+  .tab-bar { width: 100%; }
+  .tab-btn { flex: 1; text-align: center; padding: 7px 8px; font-size: 12px; }
+
+  /* Section headers wrap instead of squishing */
+  .section-header { flex-wrap: wrap; gap: 10px; }
+
+  /* Buttons in tight rows can shrink text */
+  .btn { font-size: 13px; padding: 8px 14px; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+  /* Modal takes full width on small screens */
+  .modal-inner { padding: 20px 16px !important; }
 }
-@media (max-width: 360px) { .section { padding: 16px 12px; } .bottom-nav-item { padding: 6px 8px; font-size: 9px; } }
+
+/* Small phones */
+@media (max-width: 390px) {
+  .section { padding: 16px 12px; }
+  .bottom-nav-item { padding: 6px 6px; font-size: 9px; }
+  .card { padding: 12px; }
+  .section-title { font-size: 20px; }
+  .tab-btn { font-size: 11px; padding: 6px 6px; }
+}
+
+/* Very small phones */
+@media (max-width: 320px) {
+  .bottom-nav-item span { display: none; }
+  .bottom-nav-item { min-height: 48px; }
+}
 </style>
 </head>
 <body>
@@ -280,7 +311,7 @@ const FoodSearch = ({ value, onChange, onSelect, onKeyDown, autoFocus }) => {
         autoFocus={autoFocus}
       />
       {open && (
-        <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',zIndex:300,maxHeight:220,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.4)'}}>
+        <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',zIndex:300,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',WebkitOverflowScrolling:'touch'}}>
           {suggestions.map((food, i) => (
             <div key={i} onMouseDown={() => pick(food)}
               style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 14px',cursor:'pointer',
@@ -511,9 +542,9 @@ const HomeSection = ({ allData, signOut, userEmail }) => {
   },[activeDays]);
   return (
     <div className="section">
-      <div className="mobile-account" style={{justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <span style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'65%'}}>{userEmail}</span>
-        <button className="btn btn-ghost btn-sm" onClick={signOut} style={{gap:6,flexShrink:0}}><Icon name="logout" size={13}/>Sign out</button>
+      <div className="mobile-account" style={{justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:8}}>
+        <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{userEmail}</span>
+        <button className="btn btn-ghost btn-sm" onClick={signOut} style={{gap:6,flexShrink:0,whiteSpace:'nowrap'}}><Icon name="logout" size={13}/>Sign out</button>
       </div>
       <div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:24}}>
         <p style={{fontSize:15,fontWeight:500,lineHeight:1.6,fontStyle:'italic'}}>"{quote.text}"</p>
@@ -598,7 +629,7 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
   const grouped=useMemo(()=>[...new Set(workoutSessions.map(w=>w.date))].sort().reverse().map(date=>({date,sessions:workoutSessions.filter(w=>w.date===date)})),[workoutSessions]);
   return (
     <div className="section">
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
         <div className="section-title">Gym</div>
         <button className="btn btn-primary btn-sm" onClick={()=>setShowLogModal(true)}><Icon name="plus" size={15}/>Log Workout</button>
       </div>
@@ -616,8 +647,8 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
               {sessions.map(w=>(
                 <div key={w.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:500}}>{w.exercise}</div>
-                    <div style={{fontSize:12,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:1}}>{w.sets} sets × {w.reps} reps @ {w.weight} kg</div>
+                    <div style={{fontSize:14,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{w.exercise}</div>
+                    <div style={{fontSize:11,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:1}}>{w.sets}×{w.reps} @ {w.weight}kg</div>
                   </div>
                   <button className="btn btn-icon btn-danger" onClick={()=>deleteSession(w.id)}><Icon name="trash" size={15}/></button>
                 </div>))}
@@ -711,7 +742,7 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, markActive }) => 
   const deleteFav=id=>setFavMeals(prev=>{const n=prev.filter(f=>f.id!==id);save('favMeals',n);return n;});
   return (
     <div className="section">
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
         <div className="section-title">Food</div>
         <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} style={{width:'auto',fontSize:13}}/>
       </div>
@@ -850,7 +881,7 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
 
   return (
     <div className="section">
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
         <div className="section-title">Planning</div>
         {tab==='calendar' && <button className="btn btn-primary btn-sm" onClick={()=>{setTaskForm({text:'',priority:'medium'});setShowTaskModal(true);}}><Icon name="plus" size={15}/>Add Task</button>}
         {tab==='habits'   && <button className="btn btn-primary btn-sm" onClick={()=>setShowHabitModal(true)}><Icon name="plus" size={15}/>Add Habit</button>}
