@@ -878,6 +878,17 @@ const App = () => {
     });
   }, []);
 
+  // Refresh from cloud whenever the tab/app becomes visible again
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && _uid) {
+        loadCloud().then(cloud => { if (cloud) applyCloud(cloud); });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [applyCloud]);
+
   useEffect(() => {
     db.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) { handleAuth(session.user); }
