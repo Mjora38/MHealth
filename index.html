@@ -15,7 +15,7 @@
 :root {
   --bg: #0d0d0f; --bg2: #141417; --bg3: #1c1c21; --bg4: #242429;
   --border: #2a2a31; --text: #e8e8ec; --text2: #9898a8; --text3: #5a5a6a;
-  --accent: oklch(75% 0.2 145); --accent-dim: oklch(75% 0.2 145 / 0.12); --accent-border: oklch(75% 0.2 145 / 0.3);
+  --accent: oklch(75% 0.2 145); --accent-dim: oklch(75% 0.2 145 / 0.12); --accent-border: oklch(75% 0.2 145 / 0.3); --accent-med: oklch(75% 0.2 145 / 0.5);
   --amber: oklch(75% 0.15 75); --amber-dim: oklch(75% 0.15 75 / 0.12);
   --red: oklch(68% 0.18 25); --red-dim: oklch(68% 0.18 25 / 0.12);
   --blue: oklch(68% 0.18 200);
@@ -162,7 +162,25 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React;
 // ── Storage ────────────────────────────────────────────────────────────────
 let _uid = null;
 
-const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs','customExercises','calorieGoal','waterLogs','futurePlans'];
+const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs','customExercises','calorieGoal','waterLogs','futurePlans','userProfile','bodyMeasurements','mealTemplates'];
+
+const ACCENT_PRESETS = [
+  { id:'green',  label:'Green',  accent:'oklch(75% 0.2 145)',  dim:'oklch(75% 0.2 145/0.12)',  border:'oklch(75% 0.2 145/0.3)',  med:'oklch(75% 0.2 145/0.5)'  },
+  { id:'blue',   label:'Blue',   accent:'oklch(70% 0.18 240)', dim:'oklch(70% 0.18 240/0.12)', border:'oklch(70% 0.18 240/0.3)', med:'oklch(70% 0.18 240/0.5)' },
+  { id:'purple', label:'Purple', accent:'oklch(70% 0.2 300)',  dim:'oklch(70% 0.2 300/0.12)',  border:'oklch(70% 0.2 300/0.3)',  med:'oklch(70% 0.2 300/0.5)'  },
+  { id:'orange', label:'Orange', accent:'oklch(75% 0.18 60)',  dim:'oklch(75% 0.18 60/0.12)',  border:'oklch(75% 0.18 60/0.3)',  med:'oklch(75% 0.18 60/0.5)'  },
+  { id:'pink',   label:'Pink',   accent:'oklch(75% 0.18 350)', dim:'oklch(75% 0.18 350/0.12)', border:'oklch(75% 0.18 350/0.3)', med:'oklch(75% 0.18 350/0.5)' },
+  { id:'cyan',   label:'Cyan',   accent:'oklch(75% 0.15 195)', dim:'oklch(75% 0.15 195/0.12)', border:'oklch(75% 0.15 195/0.3)', med:'oklch(75% 0.15 195/0.5)' },
+];
+
+const applyAccent = preset => {
+  const p = ACCENT_PRESETS.find(x=>x.id===preset) || ACCENT_PRESETS[0];
+  const r = document.documentElement.style;
+  r.setProperty('--accent',        p.accent);
+  r.setProperty('--accent-dim',    p.dim);
+  r.setProperty('--accent-border', p.border);
+  r.setProperty('--accent-med',    p.med);
+};
 
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
@@ -449,7 +467,7 @@ const AuthScreen = ({ onSignIn }) => {
 };
 
 // ── Line Chart ─────────────────────────────────────────────────────────────
-const LineChart = ({ data, color = 'var(--accent)', height = 120, label = '' }) => {
+const LineChart = ({ data, color = 'var(--accent)', height = 120, label = '', goalLine = null }) => {
   const ref = useRef(null);
   const [width, setWidth] = useState(500);
   useEffect(() => {
@@ -459,17 +477,22 @@ const LineChart = ({ data, color = 'var(--accent)', height = 120, label = '' }) 
     return () => ro.disconnect();
   }, []);
   if (!data || data.length < 2) return <div className="empty-state" style={{padding:'20px 0'}}>Not enough data yet</div>;
-  const vals = data.map(d=>d.value), min=Math.min(...vals), max=Math.max(...vals), range=max-min||1;
+  const vals = data.map(d=>d.value);
+  const allVals = goalLine !== null ? [...vals, goalLine] : vals;
+  const min=Math.min(...allVals), max=Math.max(...allVals), range=max-min||1;
   const W=width, H=height, pad=10;
   const pts = data.map((d,i)=>[(i/(data.length-1))*(W-pad*2)+pad, H-((d.value-min)/range)*(H-pad*2)-pad]);
   const lineD = pts.map((p,i)=>`${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
   const areaD = lineD+` L${pts[pts.length-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
   const gid = `g-${label.replace(/\s/g,'_')}`;
+  const goalY = goalLine !== null ? H-((goalLine-min)/range)*(H-pad*2)-pad : null;
   return (
     <div className="chart-wrap" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} className="chart" style={{width:'100%',height:H,display:'block'}}>
         <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.25"/><stop offset="100%" stopColor={color} stopOpacity="0.02"/></linearGradient></defs>
         <path d={areaD} fill={`url(#${gid})`}/>
+        {goalY!==null&&<line x1={pad} y1={goalY} x2={W-pad} y2={goalY} stroke="var(--amber)" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.8"/>}
+        {goalY!==null&&<text x={W-pad-2} y={goalY-4} fill="var(--amber)" fontSize="9" textAnchor="end" fontFamily="var(--mono)" opacity="0.9">goal {goalLine}</text>}
         <path d={lineD} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
         {pts.map(([x,y],i)=><g key={i}><circle cx={x} cy={y} r="5" fill={color} stroke="var(--bg2)" strokeWidth="2"/><title>{`${data[i].date}: ${data[i].value}`}</title></g>)}
       </svg>
@@ -497,6 +520,40 @@ const StreakRing = ({ streak }) => {
   );
 };
 
+// ── Activity Heatmap ───────────────────────────────────────────────────────
+const ActivityHeatmap = ({ activeDays }) => {
+  const today = new Date();
+  const cells = [];
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    cells.push({ key, active: activeDays.includes(key) });
+  }
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const active = cells.filter(c => c.active).length;
+  return (
+    <div>
+      <div style={{fontSize:11,color:'var(--text3)',marginBottom:8,fontFamily:'var(--mono)'}}>
+        {active} active days in last 90
+      </div>
+      <div style={{display:'flex',gap:2,overflowX:'auto',paddingBottom:2}}>
+        {weeks.map((week,wi)=>(
+          <div key={wi} style={{display:'flex',flexDirection:'column',gap:2}}>
+            {week.map(cell=>(
+              <div key={cell.key} title={cell.key} style={{
+                width:10,height:10,borderRadius:2,flexShrink:0,
+                background:cell.active?'var(--accent)':'var(--bg4)',
+                opacity:cell.active?1:0.4,transition:'background 0.2s'
+              }}/>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ── Modal ──────────────────────────────────────────────────────────────────
 const Modal = ({ title, onClose, children }) => {
   useEffect(() => {
@@ -518,7 +575,7 @@ const Modal = ({ title, onClose, children }) => {
 };
 
 // ── HOME ───────────────────────────────────────────────────────────────────
-const HomeSection = ({ allData, signOut, userEmail }) => {
+const HomeSection = ({ allData, signOut, userEmail, setWorkoutSessions, setTasks, setMeals, markActive }) => {
   const quote = QUOTES[new Date().getDate()%QUOTES.length];
   const { tasks, meals, workoutSessions, activeDays } = allData;
   const todayTasks = tasks.filter(t=>t.date===TODAY).slice(0,5);
@@ -526,30 +583,108 @@ const HomeSection = ({ allData, signOut, userEmail }) => {
   const todayWorkouts = workoutSessions.filter(w=>w.date===TODAY);
   const totalCals = Object.values(todayMeals).flat().reduce((s,m)=>s+(m?.calories||0),0);
   const hasMeals = ['breakfast','lunch','dinner','snacks'].some(s=>todayMeals[s]?.length>0);
+
+  // Quick-add state
+  const [qaModal, setQaModal] = useState(null); // 'workout' | 'meal' | 'task'
+  const [qaWorkout, setQaWorkout] = useState({ exercise:'', sets:'', reps:'', weight:'' });
+  const [qaMeal, setQaMeal] = useState({ name:'', slot:'breakfast', calories:'' });
+  const [qaTask, setQaTask] = useState({ text:'', priority:'medium' });
+
+  const quickAddWorkout = () => {
+    if (!qaWorkout.exercise.trim()) return;
+    const s = { id:Date.now(), date:TODAY, exercise:qaWorkout.exercise.trim(), sets:parseInt(qaWorkout.sets)||1, reps:parseInt(qaWorkout.reps)||1, weight:parseFloat(qaWorkout.weight)||0 };
+    setWorkoutSessions(prev=>{ const n=[...prev,s]; save('workoutSessions',n); return n; });
+    markActive(TODAY); setQaWorkout({exercise:'',sets:'',reps:'',weight:''}); setQaModal(null);
+  };
+  const quickAddMeal = () => {
+    if (!qaMeal.name.trim()) return;
+    const m = { id:Date.now(), name:qaMeal.name.trim(), calories:parseInt(qaMeal.calories)||0, protein:0, carbs:0, fat:0 };
+    setMeals(prev=>{ const day=prev[TODAY]||{}; const slot=[...(day[qaMeal.slot]||[]),m]; const n={...prev,[TODAY]:{...day,[qaMeal.slot]:slot}}; save('meals',n); return n; });
+    markActive(TODAY); setQaMeal({name:'',slot:'breakfast',calories:''}); setQaModal(null);
+  };
+  const quickAddTask = () => {
+    if (!qaTask.text.trim()) return;
+    const t = { id:Date.now(), text:qaTask.text.trim(), priority:qaTask.priority, date:TODAY, done:false };
+    setTasks(prev=>{ const n=[...prev,t]; save('tasks',n); return n; });
+    markActive(TODAY); setQaTask({text:'',priority:'medium'}); setQaModal(null);
+  };
+
   const streak = useMemo(()=>{
     const days=[...new Set([...activeDays,TODAY])].sort().reverse();
     let s=0,prev=null;
     for(const d of days){if(!prev){s=1;prev=d;continue;}if(Math.round((new Date(prev)-new Date(d))/86400000)===1){s++;prev=d;}else break;}
     return s;
   },[activeDays]);
+
+  // Weekly summary (Mon–Sun of current week)
+  const weekSummary = useMemo(()=>{
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun
+    const mon = new Date(now); mon.setDate(now.getDate() - ((day+6)%7));
+    const weekDays = Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d.toISOString().split('T')[0]; });
+    const wWorkouts = workoutSessions.filter(w=>weekDays.includes(w.date)).length;
+    const wTasks    = tasks.filter(t=>weekDays.includes(t.date)&&t.done).length;
+    const wMealDays = weekDays.filter(d=>Object.values(meals[d]||{}).flat().length>0).length;
+    return { workouts:wWorkouts, tasks:wTasks, mealDays:wMealDays };
+  },[workoutSessions,tasks,meals]);
+
+  const isNewUser = activeDays.length === 0;
+
   return (
     <div className="section">
       <div className="mobile-account" style={{justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:8}}>
         <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{userEmail}</span>
         <button className="btn btn-ghost btn-sm" onClick={signOut} style={{gap:6,flexShrink:0,whiteSpace:'nowrap'}}><Icon name="logout" size={13}/>Sign out</button>
       </div>
-      <div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:24}}>
-        <p style={{fontSize:15,fontWeight:500,lineHeight:1.6,fontStyle:'italic'}}>"{quote.text}"</p>
-        <p style={{fontSize:12,color:'var(--accent)',marginTop:8,fontFamily:'var(--mono)'}}>— {quote.author}</p>
+
+      {/* Onboarding card */}
+      {isNewUser&&<div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:20}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Welcome to MHealth! 👋</div>
+        <p style={{fontSize:13,color:'var(--text2)',lineHeight:1.6}}>Start by logging a workout in <b>Gym</b>, planning meals in <b>Food</b>, or adding tasks in <b>Plan</b>. Your streak starts today.</p>
+      </div>}
+
+      {/* Quote */}
+      <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:20}}>
+        <p style={{fontSize:14,fontWeight:500,lineHeight:1.6,fontStyle:'italic',color:'var(--text2)'}}>"{quote.text}"</p>
+        <p style={{fontSize:11,color:'var(--accent)',marginTop:6,fontFamily:'var(--mono)'}}>— {quote.author}</p>
       </div>
-      <div className="card" style={{display:'flex',alignItems:'center',gap:24,marginBottom:24,flexWrap:'wrap'}}>
-        <StreakRing streak={streak}/>
-        <div>
-          <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>Current Streak</div>
-          <div style={{fontSize:22,fontWeight:700}}>{streak} day{streak!==1?'s':''} 🔥</div>
-          <div style={{fontSize:12,color:'var(--text3)',marginTop:6,fontFamily:'var(--mono)'}}>{new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
+
+      {/* Quick-add buttons */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:20}}>
+        {[['workout','Log Workout','dumbbell'],['meal','Log Meal','food'],['task','Add Task','plan']].map(([type,label,icon])=>(
+          <button key={type} className="btn btn-ghost" style={{flexDirection:'column',gap:6,padding:'14px 8px',height:'auto',borderRadius:'var(--radius)',border:'1px solid var(--border)'}}
+            onClick={()=>setQaModal(type)}>
+            <Icon name={icon} size={18}/><span style={{fontSize:12}}>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Streak + heatmap */}
+      <div className="card" style={{marginBottom:20}}>
+        <div style={{display:'flex',alignItems:'center',gap:20,flexWrap:'wrap',marginBottom:16}}>
+          <StreakRing streak={streak}/>
+          <div>
+            <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>Current Streak</div>
+            <div style={{fontSize:22,fontWeight:700}}>{streak} day{streak!==1?'s':''} 🔥</div>
+            <div style={{fontSize:12,color:'var(--text3)',marginTop:6,fontFamily:'var(--mono)'}}>{new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
+          </div>
+        </div>
+        <ActivityHeatmap activeDays={activeDays}/>
+      </div>
+
+      {/* Weekly summary */}
+      <div className="card" style={{marginBottom:20}}>
+        <div className="card-title">This Week</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginTop:8}}>
+          {[['Workouts',weekSummary.workouts,'var(--accent)'],['Tasks Done',weekSummary.tasks,'var(--blue)'],['Meal Days',weekSummary.mealDays,'var(--amber)']].map(([label,val,color])=>(
+            <div key={label} style={{textAlign:'center'}}>
+              <div style={{fontSize:26,fontWeight:700,fontFamily:'var(--mono)',color}}>{val}</div>
+              <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{label}</div>
+            </div>
+          ))}
         </div>
       </div>
+
       <div className="grid-2" style={{gap:16}}>
         <div className="card">
           <div className="card-title">Today's Tasks</div>
@@ -587,6 +722,49 @@ const HomeSection = ({ allData, signOut, userEmail }) => {
                 </div>))}</div>}
         </div>
       </div>
+
+      {/* Quick-add modals */}
+      {qaModal==='workout'&&<Modal title="Log Workout" onClose={()=>setQaModal(null)}>
+        <div className="col">
+          <div className="form-group"><label className="form-label">Exercise</label>
+            <input value={qaWorkout.exercise} onChange={e=>setQaWorkout(p=>({...p,exercise:e.target.value}))} placeholder="e.g. Bench Press" autoFocus onKeyDown={e=>e.key==='Enter'&&quickAddWorkout()}/></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Sets</label><input type="number" min="1" value={qaWorkout.sets} onChange={e=>setQaWorkout(p=>({...p,sets:e.target.value}))} placeholder="3"/></div>
+            <div className="form-group"><label className="form-label">Reps</label><input type="number" min="1" value={qaWorkout.reps} onChange={e=>setQaWorkout(p=>({...p,reps:e.target.value}))} placeholder="10"/></div>
+            <div className="form-group"><label className="form-label">Weight (kg)</label><input type="number" min="0" step="0.5" value={qaWorkout.weight} onChange={e=>setQaWorkout(p=>({...p,weight:e.target.value}))} placeholder="60"/></div>
+          </div>
+          <button className="btn btn-primary" onClick={quickAddWorkout}>Log Workout</button>
+        </div>
+      </Modal>}
+      {qaModal==='meal'&&<Modal title="Log Meal" onClose={()=>setQaModal(null)}>
+        <div className="col">
+          <div className="form-group"><label className="form-label">Food name</label>
+            <input value={qaMeal.name} onChange={e=>setQaMeal(p=>({...p,name:e.target.value}))} placeholder="e.g. Chicken breast" autoFocus onKeyDown={e=>e.key==='Enter'&&quickAddMeal()}/></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Slot</label>
+              <select value={qaMeal.slot} onChange={e=>setQaMeal(p=>({...p,slot:e.target.value}))}>
+                {['breakfast','lunch','dinner','snacks'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select></div>
+            <div className="form-group"><label className="form-label">Calories</label>
+              <input type="number" min="0" value={qaMeal.calories} onChange={e=>setQaMeal(p=>({...p,calories:e.target.value}))} placeholder="300"/></div>
+          </div>
+          <button className="btn btn-primary" onClick={quickAddMeal}>Add Meal</button>
+        </div>
+      </Modal>}
+      {qaModal==='task'&&<Modal title="Add Task" onClose={()=>setQaModal(null)}>
+        <div className="col">
+          <div className="form-group"><label className="form-label">Task</label>
+            <input value={qaTask.text} onChange={e=>setQaTask(p=>({...p,text:e.target.value}))} placeholder="What needs to be done?" autoFocus onKeyDown={e=>e.key==='Enter'&&quickAddTask()}/></div>
+          <div className="form-group"><label className="form-label">Priority</label>
+            <div style={{display:'flex',gap:8}}>
+              {['high','medium','low'].map(p=>(
+                <button key={p} className={`btn btn-sm ${qaTask.priority===p?'btn-primary':'btn-ghost'}`} style={{flex:1,justifyContent:'center',textTransform:'capitalize'}} onClick={()=>setQaTask(prev=>({...prev,priority:p}))}>{p}</button>
+              ))}
+            </div>
+          </div>
+          <button className="btn btn-primary" onClick={quickAddTask}>Add Task</button>
+        </div>
+      </Modal>}
     </div>
   );
 };
@@ -1209,7 +1387,7 @@ const MacroBar = ({ protein, carbs, fat }) => {
   );
 };
 
-const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setCalorieGoal, waterLogs, setWaterLogs, markActive }) => {
+const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setCalorieGoal, waterLogs, setWaterLogs, markActive, mealTemplates, setMealTemplates }) => {
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addSlot, setAddSlot] = useState('breakfast');
@@ -1219,6 +1397,8 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
   const [tab, setTab] = useState('plan');
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [templateNameInput, setTemplateNameInput] = useState('');
 
   // Extract gram amount from food name e.g. "Chicken breast 100g" → 100
   const extractGrams = name => { const m = name.match(/(\d+)\s*g\b/i); return m ? parseInt(m[1]) : null; };
@@ -1308,6 +1488,25 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
 
   const saveGoal = () => { const g=parseInt(goalInput)||0; setCalorieGoal(g); save('calorieGoal',g); setShowGoalModal(false); };
 
+  const saveTemplate = () => {
+    if (!templateNameInput.trim()) return;
+    const dayData = meals[selectedDate] || {};
+    const hasData = ['breakfast','lunch','dinner','snacks'].some(s=>(dayData[s]||[]).length>0);
+    if (!hasData) { alert('No meals to save for this day.'); return; }
+    const t = { id:Date.now(), name:templateNameInput.trim(), meals:JSON.parse(JSON.stringify(dayData)) };
+    setMealTemplates(prev=>{ const n=[...prev,t]; save('mealTemplates',n); return n; });
+    setTemplateNameInput(''); setShowSaveTemplateModal(false);
+  };
+  const loadTemplate = (tmpl) => {
+    if (!window.confirm(`Load "${tmpl.name}" into ${selectedDate}? This will replace existing meals for that day.`)) return;
+    const newMeals = JSON.parse(JSON.stringify(tmpl.meals));
+    // Re-assign IDs to avoid collisions
+    ['breakfast','lunch','dinner','snacks'].forEach(s=>{ if(newMeals[s]) newMeals[s]=newMeals[s].map(m=>({...m,id:Date.now()+Math.random()})); });
+    setMeals(prev=>{ const n={...prev,[selectedDate]:newMeals}; save('meals',n); return n; });
+    markActive(selectedDate); setTab('plan');
+  };
+  const deleteTemplate = id => setMealTemplates(prev=>{ const n=prev.filter(t=>t.id!==id); save('mealTemplates',n); return n; });
+
   const goalPct = calorieGoal>0 ? Math.min(totals.cal/calorieGoal,1) : 0;
   const overGoal = calorieGoal>0 && totals.cal>calorieGoal;
 
@@ -1319,7 +1518,7 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
       </div>
 
       <div className="tab-bar">
-        {[['plan','Meal Plan'],['stats','Stats'],['favorites','Favorites']].map(([id,label])=>(
+        {[['plan','Meal Plan'],['stats','Stats'],['favorites','Favorites'],['templates','Templates']].map(([id,label])=>(
           <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>
         ))}
       </div>
@@ -1477,6 +1676,56 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
               ))}
             </div>}
       </div>}
+
+      {tab==='templates'&&<div className="col">
+        <div className="card">
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <div className="card-title" style={{marginBottom:0}}>Day Templates</div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>{setTemplateNameInput('');setShowSaveTemplateModal(true);}}>
+              <Icon name="plus" size={14}/>Save Today
+            </button>
+          </div>
+          <div style={{fontSize:12,color:'var(--text3)',marginBottom:12}}>Save a full day's meals as a reusable template. Load it on any day to instantly fill all slots.</div>
+          {(!mealTemplates||mealTemplates.length===0)
+            ?<div className="empty-state">No templates yet — plan a day in the Meal Plan tab, then save it here.</div>
+            :<div className="col" style={{gap:10}}>
+              {mealTemplates.map(t=>{
+                const slots = ['breakfast','lunch','dinner','snacks'].filter(s=>(t.meals[s]||[]).length>0);
+                const totalCal = slots.flatMap(s=>t.meals[s]||[]).reduce((a,m)=>a+(m.calories||0),0);
+                return (
+                  <div key={t.id} style={{border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'14px 16px'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:8}}>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:600}}>{t.name}</div>
+                        <div style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:2}}>{totalCal} kcal · {slots.join(', ')}</div>
+                      </div>
+                      <div style={{display:'flex',gap:6,flexShrink:0}}>
+                        <button className="btn btn-ghost btn-sm" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>loadTemplate(t)}>Load into {selectedDate.slice(5)}</button>
+                        <button className="btn btn-icon btn-danger" style={{padding:4}} onClick={()=>deleteTemplate(t.id)}><Icon name="trash" size={13}/></button>
+                      </div>
+                    </div>
+                    {slots.map(s=>(
+                      <div key={s} style={{fontSize:11,color:'var(--text2)',marginTop:4}}>
+                        <span style={{textTransform:'capitalize',color:'var(--text3)'}}>{s}: </span>
+                        {(t.meals[s]||[]).map(m=>m.name).join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>}
+        </div>
+      </div>}
+
+      {/* Save template modal */}
+      {showSaveTemplateModal&&<Modal title="Save as Template" onClose={()=>setShowSaveTemplateModal(false)}>
+        <div className="col">
+          <div style={{fontSize:13,color:'var(--text2)'}}>Saving meals from <b>{selectedDate}</b> as a template.</div>
+          <div className="form-group"><label className="form-label">Template name</label>
+            <input value={templateNameInput} onChange={e=>setTemplateNameInput(e.target.value)} placeholder="e.g. High Protein Day" autoFocus onKeyDown={e=>e.key==='Enter'&&saveTemplate()}/></div>
+          <button className="btn btn-primary" onClick={saveTemplate}>Save Template</button>
+        </div>
+      </Modal>}
 
       {/* Add meal modal */}
       {showAddModal&&<Modal title={`Add to ${addSlot}`} onClose={()=>setShowAddModal(false)}>
@@ -1709,9 +1958,13 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
       {tab==='calendar' && <div className="col">
         {/* Month nav */}
         <div className="card" style={{padding:'16px 20px'}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,gap:6}}>
             <button className="btn btn-ghost btn-sm" onClick={()=>setCalMonth(new Date(year,month-1,1))} style={{padding:'6px 10px',fontSize:18,lineHeight:1}}>‹</button>
-            <span style={{fontSize:15,fontWeight:700}}>{monthLabel}</span>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:15,fontWeight:700}}>{monthLabel}</span>
+              {(year!==new Date().getFullYear()||month!==new Date().getMonth())&&
+                <button className="btn btn-ghost btn-sm" style={{fontSize:11,padding:'3px 8px'}} onClick={()=>{setCalMonth(new Date());setSelectedDate(TODAY);}}>Today</button>}
+            </div>
             <button className="btn btn-ghost btn-sm" onClick={()=>setCalMonth(new Date(year,month+1,1))} style={{padding:'6px 10px',fontSize:18,lineHeight:1}}>›</button>
           </div>
 
@@ -1935,11 +2188,21 @@ const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHab
 };
 
 // ── PROGRESS ──────────────────────────────────────────────────────────────
-const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, markActive }) => {
+const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, markActive, userProfile, setUserProfile, bodyMeasurements, setBodyMeasurements }) => {
+  const [tab, setTab] = useState('overview');
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [showMeasureModal, setShowMeasureModal] = useState(false);
   const [weightForm, setWeightForm] = useState({ date:TODAY, weight:'' });
   const [checkForm, setCheckForm] = useState({ date:TODAY, energy:5, mood:5, notes:'' });
+  const [measureForm, setMeasureForm] = useState({ date:TODAY, chest:'', waist:'', hips:'', arms:'', thighs:'' });
+  const [profileForm, setProfileForm] = useState({ height: userProfile?.height||'', targetWeight: userProfile?.targetWeight||'' });
+
+  const saveProfile = () => {
+    const p = { ...userProfile, height:parseFloat(profileForm.height)||null, targetWeight:parseFloat(profileForm.targetWeight)||null };
+    setUserProfile(p); save('userProfile', p);
+  };
+
   const addWeight=()=>{
     if(!weightForm.weight)return;
     const w={id:Date.now(),date:weightForm.date,value:parseFloat(weightForm.weight)};
@@ -1951,37 +2214,71 @@ const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, mar
     setCheckIns(prev=>{const n=[...prev.filter(x=>x.date!==checkForm.date),c].sort((a,b)=>a.date.localeCompare(b.date));save('checkIns',n);return n;});
     markActive(checkForm.date);setCheckForm({date:TODAY,energy:5,mood:5,notes:''});setShowCheckInModal(false);
   };
+  const addMeasure=()=>{
+    const m={id:Date.now(),...measureForm};
+    setBodyMeasurements(prev=>{const n=[...prev.filter(x=>x.date!==measureForm.date),m].sort((a,b)=>a.date.localeCompare(b.date));save('bodyMeasurements',n);return n;});
+    setMeasureForm({date:TODAY,chest:'',waist:'',hips:'',arms:'',thighs:''});setShowMeasureModal(false);
+  };
   const deleteWeight=id=>setWeightLogs(prev=>{const n=prev.filter(w=>w.id!==id);save('weightLogs',n);return n;});
   const deleteCheckIn=id=>setCheckIns(prev=>{const n=prev.filter(c=>c.id!==id);save('checkIns',n);return n;});
+  const deleteMeasure=id=>setBodyMeasurements(prev=>{const n=prev.filter(m=>m.id!==id);save('bodyMeasurements',n);return n;});
+
   const lw=weightLogs[weightLogs.length-1], lc=checkIns[checkIns.length-1];
   const wd=weightLogs.length>=2?(weightLogs[weightLogs.length-1].value-weightLogs[weightLogs.length-2].value).toFixed(1):null;
+  const bmi = lw && userProfile?.height ? (lw.value / Math.pow(userProfile.height/100, 2)).toFixed(1) : null;
+  const bmiLabel = bmi ? (bmi<18.5?'Underweight':bmi<25?'Normal':bmi<30?'Overweight':'Obese') : '';
+  const bmiColor = bmi ? (bmi<18.5?'var(--blue)':bmi<25?'var(--accent)':bmi<30?'var(--amber)':'var(--red)') : 'var(--text)';
+
   return (
     <div className="section">
-      <div className="section-title" style={{marginBottom:24}}>Progress</div>
-      <div className="grid-2" style={{marginBottom:16}}>
-        <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-          <div style={{minWidth:0}}>
-            <div className="card-title">Current Weight</div>
-            <div style={{fontSize:28,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{lw?`${lw.value} kg`:'—'}</div>
-            {wd!==null&&<div style={{fontSize:11,color:parseFloat(wd)<0?'var(--accent)':'var(--red)',marginTop:2,fontFamily:'var(--mono)'}}>{parseFloat(wd)>0?'+':''}{wd} kg from last</div>}
-            {lw&&<div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{lw.date}</div>}
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setShowWeightModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
-        </div>
-        <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-          <div style={{minWidth:0}}>
-            <div className="card-title">Last Check-in</div>
-            {lc?<div style={{display:'flex',gap:16,marginTop:4}}>
-              <div><div style={{fontSize:11,color:'var(--text3)'}}>Mood</div><div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--amber)'}}>{lc.mood}<span style={{fontSize:13}}>/10</span></div></div>
-              <div><div style={{fontSize:11,color:'var(--text3)'}}>Energy</div><div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{lc.energy}<span style={{fontSize:13}}>/10</span></div></div>
-            </div>:<div style={{color:'var(--text3)',fontSize:13,marginTop:4}}>No check-in yet</div>}
-            {lc&&<div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{lc.date}</div>}
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setShowCheckInModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
-        </div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
+        <div className="section-title">Progress</div>
+        {tab==='overview'&&<button className="btn btn-ghost btn-sm" onClick={()=>setShowCheckInModal(true)}><Icon name="plus" size={14}/>Check-in</button>}
+        {tab==='body'&&<button className="btn btn-ghost btn-sm" onClick={()=>setShowMeasureModal(true)}><Icon name="plus" size={14}/>Log</button>}
       </div>
-      <div className="col">
-        <div className="card"><div className="card-title">Weight Over Time</div><LineChart data={weightLogs.map(w=>({date:w.date.slice(5),value:w.value}))} label="weight"/></div>
+
+      <div className="tab-bar">
+        {[['overview','Overview'],['body','Body']].map(([id,label])=>(
+          <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {tab==='overview'&&<div className="col">
+        <div className="grid-2">
+          <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+            <div style={{minWidth:0}}>
+              <div className="card-title">Current Weight</div>
+              <div style={{fontSize:28,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{lw?`${lw.value} kg`:'—'}</div>
+              {wd!==null&&<div style={{fontSize:11,color:parseFloat(wd)<0?'var(--accent)':'var(--red)',marginTop:2,fontFamily:'var(--mono)'}}>{parseFloat(wd)>0?'+':''}{wd} kg from last</div>}
+              {lw&&<div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{lw.date}</div>}
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowWeightModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
+          </div>
+          <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+            <div style={{minWidth:0}}>
+              <div className="card-title">Last Check-in</div>
+              {lc?<div style={{display:'flex',gap:16,marginTop:4}}>
+                <div><div style={{fontSize:11,color:'var(--text3)'}}>Mood</div><div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--amber)'}}>{lc.mood}<span style={{fontSize:13}}>/10</span></div></div>
+                <div><div style={{fontSize:11,color:'var(--text3)'}}>Energy</div><div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{lc.energy}<span style={{fontSize:13}}>/10</span></div></div>
+              </div>:<div style={{color:'var(--text3)',fontSize:13,marginTop:4}}>No check-in yet</div>}
+              {lc&&<div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{lc.date}</div>}
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowCheckInModal(true)} style={{flexShrink:0}}><Icon name="plus" size={14}/>Log</button>
+          </div>
+        </div>
+        {bmi&&<div className="card">
+          <div className="card-title">BMI</div>
+          <div style={{display:'flex',alignItems:'baseline',gap:12,marginTop:4}}>
+            <div style={{fontSize:32,fontWeight:700,fontFamily:'var(--mono)',color:bmiColor}}>{bmi}</div>
+            <div style={{fontSize:14,color:bmiColor,fontWeight:600}}>{bmiLabel}</div>
+          </div>
+          <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Based on {lw.value} kg · {userProfile.height} cm</div>
+        </div>}
+        <div className="card">
+          <div className="card-title">Weight Over Time</div>
+          <LineChart data={weightLogs.map(w=>({date:w.date.slice(5),value:w.value}))} label="weight" goalLine={userProfile?.targetWeight||null}/>
+          {userProfile?.targetWeight&&<div style={{fontSize:11,color:'var(--amber)',marginTop:4,fontFamily:'var(--mono)'}}>Target: {userProfile.targetWeight} kg</div>}
+        </div>
         <div className="grid-2">
           <div className="card"><div className="card-title">Mood</div><LineChart data={checkIns.map(c=>({date:c.date.slice(5),value:c.mood}))} color="var(--amber)" height={90} label="mood"/></div>
           <div className="card"><div className="card-title">Energy</div><LineChart data={checkIns.map(c=>({date:c.date.slice(5),value:c.energy}))} color="var(--blue)" height={90} label="energy"/></div>
@@ -2004,7 +2301,48 @@ const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, mar
               <button className="btn btn-icon btn-danger" style={{padding:4,flexShrink:0}} onClick={()=>deleteCheckIn(c.id)}><Icon name="trash" size={13}/></button>
             </div>))}</div>
         </div>}
-      </div>
+      </div>}
+
+      {tab==='body'&&<div className="col">
+        {/* Goals / profile */}
+        <div className="card">
+          <div className="card-title">Goals & Profile</div>
+          <div className="form-row" style={{marginTop:8}}>
+            <div className="form-group"><label className="form-label">Height (cm)</label>
+              <input type="number" min="100" max="250" value={profileForm.height} onChange={e=>setProfileForm(p=>({...p,height:e.target.value}))} placeholder="175" onBlur={saveProfile}/></div>
+            <div className="form-group"><label className="form-label">Target Weight (kg)</label>
+              <input type="number" min="30" max="300" step="0.1" value={profileForm.targetWeight} onChange={e=>setProfileForm(p=>({...p,targetWeight:e.target.value}))} placeholder="70" onBlur={saveProfile}/></div>
+          </div>
+          <div style={{fontSize:11,color:'var(--text3)'}}>Changes save automatically on blur. Target weight shows as a goal line on the weight chart.</div>
+        </div>
+        {/* Measurements log */}
+        <div className="card">
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <div className="card-title" style={{marginBottom:0}}>Body Measurements</div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowMeasureModal(true)}><Icon name="plus" size={14}/>Log</button>
+          </div>
+          {bodyMeasurements.length===0?<div className="empty-state">No measurements logged yet</div>
+            :<div className="col" style={{gap:10}}>
+              {[...bodyMeasurements].reverse().slice(0,5).map(m=>(
+                <div key={m.id} style={{borderBottom:'1px solid var(--border)',paddingBottom:10}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                    <span style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{m.date}</span>
+                    <button className="btn btn-icon btn-danger" style={{padding:4}} onClick={()=>deleteMeasure(m.id)}><Icon name="trash" size={13}/></button>
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'6px 16px'}}>
+                    {[['Chest',m.chest],['Waist',m.waist],['Hips',m.hips],['Arms',m.arms],['Thighs',m.thighs]].filter(([,v])=>v).map(([label,val])=>(
+                      <div key={label} style={{fontSize:12}}>
+                        <span style={{color:'var(--text3)'}}>{label} </span>
+                        <span style={{fontWeight:600,fontFamily:'var(--mono)',color:'var(--accent)'}}>{val} cm</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>}
+        </div>
+      </div>}
+
       {showWeightModal&&<Modal title="Log Weight" onClose={()=>setShowWeightModal(false)}>
         <div className="col">
           <div className="form-row">
@@ -2029,6 +2367,22 @@ const ProgressSection = ({ weightLogs, setWeightLogs, checkIns, setCheckIns, mar
           <div className="form-group"><label className="form-label">Notes</label>
             <textarea value={checkForm.notes} onChange={e=>setCheckForm(p=>({...p,notes:e.target.value}))} rows={3} placeholder="How was your week?"/></div>
           <button className="btn btn-primary" onClick={addCheckIn}>Save Check-in</button>
+        </div>
+      </Modal>}
+      {showMeasureModal&&<Modal title="Log Measurements" onClose={()=>setShowMeasureModal(false)}>
+        <div className="col">
+          <div className="form-group"><label className="form-label">Date</label>
+            <input type="date" value={measureForm.date} onChange={e=>setMeasureForm(p=>({...p,date:e.target.value}))}/></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Chest (cm)</label><input type="number" min="0" step="0.5" value={measureForm.chest} onChange={e=>setMeasureForm(p=>({...p,chest:e.target.value}))} placeholder="100"/></div>
+            <div className="form-group"><label className="form-label">Waist (cm)</label><input type="number" min="0" step="0.5" value={measureForm.waist} onChange={e=>setMeasureForm(p=>({...p,waist:e.target.value}))} placeholder="80"/></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Hips (cm)</label><input type="number" min="0" step="0.5" value={measureForm.hips} onChange={e=>setMeasureForm(p=>({...p,hips:e.target.value}))} placeholder="100"/></div>
+            <div className="form-group"><label className="form-label">Arms (cm)</label><input type="number" min="0" step="0.5" value={measureForm.arms} onChange={e=>setMeasureForm(p=>({...p,arms:e.target.value}))} placeholder="35"/></div>
+          </div>
+          <div className="form-group"><label className="form-label">Thighs (cm)</label><input type="number" min="0" step="0.5" value={measureForm.thighs} onChange={e=>setMeasureForm(p=>({...p,thighs:e.target.value}))} placeholder="55"/></div>
+          <button className="btn btn-primary" onClick={addMeasure}>Save Measurements</button>
         </div>
       </Modal>}
     </div>
@@ -2063,6 +2417,10 @@ const App = () => {
   const [calorieGoal,      setCalorieGoal]      = useState(()=>ls.get('calorieGoal',0));
   const [waterLogs,        setWaterLogs]        = useState(()=>ls.get('waterLogs',{}));
   const [futurePlans,      setFuturePlans]      = useState(()=>ls.get('futurePlans',[]));
+  const [userProfile,      setUserProfile]      = useState(()=>ls.get('userProfile',{}));
+  const [bodyMeasurements, setBodyMeasurements] = useState(()=>ls.get('bodyMeasurements',[]));
+  const [mealTemplates,    setMealTemplates]    = useState(()=>ls.get('mealTemplates',[]));
+  const [accentColor,      setAccentColor]      = useState(()=>ls.get('accentColor','green'));
 
   const applyCloud = useCallback(cloud => {
     if (!cloud) return;
@@ -2081,6 +2439,9 @@ const App = () => {
     apply('calorieGoal',      setCalorieGoal);
     apply('waterLogs',        setWaterLogs);
     apply('futurePlans',      setFuturePlans);
+    apply('userProfile',      setUserProfile);
+    apply('bodyMeasurements', setBodyMeasurements);
+    apply('mealTemplates',    setMealTemplates);
   }, []);
 
   const handleAuth = useCallback(async user => {
@@ -2122,6 +2483,20 @@ const App = () => {
     return () => clearTimeout(t);
   }, []);
 
+  // Apply accent color on mount and when changed
+  useEffect(() => { applyAccent(accentColor); }, [accentColor]);
+
+  const changeAccent = color => { setAccentColor(color); ls.set('accentColor', color); };
+
+  const exportData = () => {
+    const data = { workoutSchemas, workoutSessions, meals, favMeals, tasks, weightLogs, checkIns, activeDays, habits, habitLogs, customExercises, calorieGoal, waterLogs, futurePlans, userProfile, bodyMeasurements, mealTemplates };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `mhealth-${TODAY}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     db.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) { handleAuth(session.user); }
@@ -2152,6 +2527,21 @@ const App = () => {
           ))}
         </nav>
         <div className="sidebar-footer">
+          {/* Accent color picker */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:'var(--text3)',fontWeight:600,letterSpacing:'0.5px',marginBottom:8,textTransform:'uppercase'}}>Accent Color</div>
+            <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+              {ACCENT_PRESETS.map(p=>(
+                <button key={p.id} title={p.label} onClick={()=>changeAccent(p.id)} style={{
+                  width:22,height:22,borderRadius:'50%',border:`2px solid ${accentColor===p.id?'var(--text)':'transparent'}`,
+                  background:p.accent,cursor:'pointer',padding:0,outline:'none',transition:'border 0.15s'
+                }}/>
+              ))}
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{width:'100%',justifyContent:'center',gap:8,marginBottom:8}} onClick={exportData}>
+            ↓ Export Data
+          </button>
           <div className="sidebar-email">{user?.email}</div>
           <button className="btn btn-ghost btn-sm" style={{width:'100%',justifyContent:'center',gap:8}} onClick={signOut}>
             <Icon name="logout" size={14}/>Sign out
@@ -2160,11 +2550,11 @@ const App = () => {
       </aside>
 
       <main className="main">
-        {activeSection==='home'     && <HomeSection allData={allData} signOut={signOut} userEmail={user?.email}/>}
+        {activeSection==='home'     && <HomeSection allData={allData} signOut={signOut} userEmail={user?.email} setWorkoutSessions={setWorkoutSessions} setTasks={setTasks} setMeals={setMeals} markActive={markActive}/>}
         {activeSection==='gym'      && <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} customExercises={customExercises} setCustomExercises={setCustomExercises} markActive={markActive}/>}
-        {activeSection==='food'     && <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} calorieGoal={calorieGoal} setCalorieGoal={setCalorieGoal} waterLogs={waterLogs} setWaterLogs={setWaterLogs} markActive={markActive}/>}
+        {activeSection==='food'     && <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} calorieGoal={calorieGoal} setCalorieGoal={setCalorieGoal} waterLogs={waterLogs} setWaterLogs={setWaterLogs} markActive={markActive} mealTemplates={mealTemplates} setMealTemplates={setMealTemplates}/>}
         {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} futurePlans={futurePlans} setFuturePlans={setFuturePlans} markActive={markActive}/>}
-        {activeSection==='progress' && <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive}/>}
+        {activeSection==='progress' && <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive} userProfile={userProfile} setUserProfile={setUserProfile} bodyMeasurements={bodyMeasurements} setBodyMeasurements={setBodyMeasurements}/>}
       </main>
 
       <nav className="bottom-nav">
