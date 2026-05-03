@@ -659,17 +659,14 @@ const HomeSection = ({ allData, signOut, userEmail, setWorkoutSessions, setTasks
         ))}
       </div>
 
-      {/* Streak + heatmap */}
-      <div className="card" style={{marginBottom:20}}>
-        <div style={{display:'flex',alignItems:'center',gap:20,flexWrap:'wrap',marginBottom:16}}>
-          <StreakRing streak={streak}/>
-          <div>
-            <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>Current Streak</div>
-            <div style={{fontSize:22,fontWeight:700}}>{streak} day{streak!==1?'s':''} 🔥</div>
-            <div style={{fontSize:12,color:'var(--text3)',marginTop:6,fontFamily:'var(--mono)'}}>{new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
-          </div>
+      {/* Streak */}
+      <div className="card" style={{display:'flex',alignItems:'center',gap:24,marginBottom:20,flexWrap:'wrap'}}>
+        <StreakRing streak={streak}/>
+        <div>
+          <div style={{fontSize:13,color:'var(--text2)',marginBottom:4}}>Current Streak</div>
+          <div style={{fontSize:22,fontWeight:700}}>{streak} day{streak!==1?'s':''} 🔥</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:6,fontFamily:'var(--mono)'}}>{new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
         </div>
-        <ActivityHeatmap activeDays={activeDays}/>
       </div>
 
       {/* Weekly summary */}
