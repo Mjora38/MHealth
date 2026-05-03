@@ -160,7 +160,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React;
 // ── Storage ────────────────────────────────────────────────────────────────
 let _uid = null;
 
-const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs'];
+const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs','customExercises'];
 
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
@@ -599,26 +599,186 @@ const HomeSection = ({ allData, signOut, userEmail }) => {
   );
 };
 
+// ── Exercise database ──────────────────────────────────────────────────────
+const EXERCISE_DB = [
+  // Chest
+  { name:'Bench Press',            bodyPart:'Chest',     category:'Barbell'      },
+  { name:'Incline Bench Press',    bodyPart:'Chest',     category:'Barbell'      },
+  { name:'Decline Bench Press',    bodyPart:'Chest',     category:'Barbell'      },
+  { name:'Dumbbell Bench Press',   bodyPart:'Chest',     category:'Dumbbell'     },
+  { name:'Incline Dumbbell Press', bodyPart:'Chest',     category:'Dumbbell'     },
+  { name:'Dumbbell Flyes',         bodyPart:'Chest',     category:'Dumbbell'     },
+  { name:'Cable Crossover',        bodyPart:'Chest',     category:'Cable'        },
+  { name:'Chest Press Machine',    bodyPart:'Chest',     category:'Machine'      },
+  { name:'Push-ups',               bodyPart:'Chest',     category:'Bodyweight'   },
+  { name:'Dips',                   bodyPart:'Chest',     category:'Bodyweight'   },
+  // Back
+  { name:'Deadlift',               bodyPart:'Back',      category:'Barbell'      },
+  { name:'Barbell Row',            bodyPart:'Back',      category:'Barbell'      },
+  { name:'T-Bar Row',              bodyPart:'Back',      category:'Barbell'      },
+  { name:'Pull-ups',               bodyPart:'Back',      category:'Bodyweight'   },
+  { name:'Chin-ups',               bodyPart:'Back',      category:'Bodyweight'   },
+  { name:'Lat Pulldown',           bodyPart:'Back',      category:'Cable'        },
+  { name:'Seated Cable Row',       bodyPart:'Back',      category:'Cable'        },
+  { name:'Face Pulls',             bodyPart:'Back',      category:'Cable'        },
+  { name:'Dumbbell Row',           bodyPart:'Back',      category:'Dumbbell'     },
+  { name:'Machine Row',            bodyPart:'Back',      category:'Machine'      },
+  // Shoulders
+  { name:'Overhead Press',         bodyPart:'Shoulders', category:'Barbell'      },
+  { name:'Smith Machine OHP',      bodyPart:'Shoulders', category:'Smith Machine'},
+  { name:'Seated Dumbbell Press',  bodyPart:'Shoulders', category:'Dumbbell'     },
+  { name:'Arnold Press',           bodyPart:'Shoulders', category:'Dumbbell'     },
+  { name:'Lateral Raises',         bodyPart:'Shoulders', category:'Dumbbell'     },
+  { name:'Front Raises',           bodyPart:'Shoulders', category:'Dumbbell'     },
+  { name:'Rear Delt Flyes',        bodyPart:'Shoulders', category:'Dumbbell'     },
+  { name:'Cable Lateral Raises',   bodyPart:'Shoulders', category:'Cable'        },
+  { name:'Machine Shoulder Press', bodyPart:'Shoulders', category:'Machine'      },
+  // Biceps
+  { name:'Barbell Curl',           bodyPart:'Biceps',    category:'Barbell'      },
+  { name:'EZ Bar Curl',            bodyPart:'Biceps',    category:'EZ Bar'       },
+  { name:'Preacher Curl',          bodyPart:'Biceps',    category:'EZ Bar'       },
+  { name:'Dumbbell Curl',          bodyPart:'Biceps',    category:'Dumbbell'     },
+  { name:'Hammer Curl',            bodyPart:'Biceps',    category:'Dumbbell'     },
+  { name:'Incline Dumbbell Curl',  bodyPart:'Biceps',    category:'Dumbbell'     },
+  { name:'Concentration Curl',     bodyPart:'Biceps',    category:'Dumbbell'     },
+  { name:'Cable Curl',             bodyPart:'Biceps',    category:'Cable'        },
+  { name:'Machine Curl',           bodyPart:'Biceps',    category:'Machine'      },
+  // Triceps
+  { name:'Close Grip Bench Press', bodyPart:'Triceps',   category:'Barbell'      },
+  { name:'Skull Crushers',         bodyPart:'Triceps',   category:'EZ Bar'       },
+  { name:'Tricep Pushdown',        bodyPart:'Triceps',   category:'Cable'        },
+  { name:'Overhead Tricep Ext.',   bodyPart:'Triceps',   category:'Cable'        },
+  { name:'Tricep Kickbacks',       bodyPart:'Triceps',   category:'Dumbbell'     },
+  { name:'Diamond Push-ups',       bodyPart:'Triceps',   category:'Bodyweight'   },
+  { name:'Tricep Dips',            bodyPart:'Triceps',   category:'Bodyweight'   },
+  { name:'Machine Tricep Ext.',    bodyPart:'Triceps',   category:'Machine'      },
+  // Legs
+  { name:'Squat',                  bodyPart:'Legs',      category:'Barbell'      },
+  { name:'Front Squat',            bodyPart:'Legs',      category:'Barbell'      },
+  { name:'Romanian Deadlift',      bodyPart:'Legs',      category:'Barbell'      },
+  { name:'Lunges',                 bodyPart:'Legs',      category:'Barbell'      },
+  { name:'Smith Machine Squat',    bodyPart:'Legs',      category:'Smith Machine'},
+  { name:'Bulgarian Split Squat',  bodyPart:'Legs',      category:'Dumbbell'     },
+  { name:'Dumbbell Lunges',        bodyPart:'Legs',      category:'Dumbbell'     },
+  { name:'Leg Press',              bodyPart:'Legs',      category:'Machine'      },
+  { name:'Leg Extension',          bodyPart:'Legs',      category:'Machine'      },
+  { name:'Leg Curl',               bodyPart:'Legs',      category:'Machine'      },
+  { name:'Hack Squat',             bodyPart:'Legs',      category:'Machine'      },
+  // Glutes
+  { name:'Hip Thrust',             bodyPart:'Glutes',    category:'Barbell'      },
+  { name:'Sumo Deadlift',          bodyPart:'Glutes',    category:'Barbell'      },
+  { name:'Cable Glute Kickback',   bodyPart:'Glutes',    category:'Cable'        },
+  { name:'Cable Pull Through',     bodyPart:'Glutes',    category:'Cable'        },
+  { name:'Glute Machine',          bodyPart:'Glutes',    category:'Machine'      },
+  { name:'Donkey Kicks',           bodyPart:'Glutes',    category:'Bodyweight'   },
+  // Abs
+  { name:'Crunches',               bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Plank',                  bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Hanging Leg Raises',     bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Leg Raises',             bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Russian Twists',         bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Ab Wheel Rollout',       bodyPart:'Abs',       category:'Bodyweight'   },
+  { name:'Cable Crunch',           bodyPart:'Abs',       category:'Cable'        },
+  { name:'Decline Crunch',         bodyPart:'Abs',       category:'Bodyweight'   },
+  // Calves
+  { name:'Standing Calf Raises',   bodyPart:'Calves',    category:'Machine'      },
+  { name:'Seated Calf Raises',     bodyPart:'Calves',    category:'Machine'      },
+  { name:'Donkey Calf Raises',     bodyPart:'Calves',    category:'Machine'      },
+  { name:'Barbell Calf Raises',    bodyPart:'Calves',    category:'Barbell'      },
+  // Forearms
+  { name:'Wrist Curls',            bodyPart:'Forearms',  category:'Barbell'      },
+  { name:'Reverse Curls',          bodyPart:'Forearms',  category:'EZ Bar'       },
+  { name:'Farmer\'s Walk',         bodyPart:'Forearms',  category:'Dumbbell'     },
+  { name:'Hammer Curl',            bodyPart:'Forearms',  category:'Dumbbell'     },
+];
+
+const BODY_PARTS = ['All','Chest','Back','Shoulders','Biceps','Triceps','Legs','Glutes','Abs','Calves','Forearms'];
+const CATEGORIES  = ['All','Barbell','Dumbbell','Machine','Bodyweight','Cable','EZ Bar','Smith Machine','Kettlebell'];
+
+const bodyPartColor = {
+  Chest:'#e85d75', Back:'#5da8e8', Shoulders:'#a85de8', Biceps:'#e8a85d',
+  Triceps:'#5de8b8', Legs:'#e8d45d', Glutes:'#e8885d', Abs:'#5de868',
+  Calves:'#5d8ae8', Forearms:'#c8e85d',
+};
+
+// ── Filter chips row ───────────────────────────────────────────────────────
+const FilterRow = ({ label, options, value, onChange }) => (
+  <div>
+    <div style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:8}}>{label}</div>
+    <div style={{display:'flex',gap:6,overflowX:'auto',paddingBottom:4,WebkitOverflowScrolling:'touch'}}>
+      {options.map(opt => (
+        <button key={opt} onClick={()=>onChange(opt)}
+          style={{padding:'5px 13px',borderRadius:99,fontSize:12,fontWeight:500,flexShrink:0,cursor:'pointer',transition:'all 0.15s',
+            border:`1px solid ${value===opt?'var(--accent)':'var(--border)'}`,
+            background:value===opt?'var(--accent-dim)':'transparent',
+            color:value===opt?'var(--accent)':'var(--text2)'}}>
+          {opt}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
 // ── GYM ───────────────────────────────────────────────────────────────────
-const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWorkoutSessions, markActive }) => {
+const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWorkoutSessions, customExercises, setCustomExercises, markActive }) => {
   const [tab, setTab] = useState('log');
-  const [showSchemaModal, setShowSchemaModal] = useState(false);
+  // log
   const [showLogModal, setShowLogModal] = useState(false);
-  const [newSchema, setNewSchema] = useState({ name:'', exercises:'' });
   const [logForm, setLogForm] = useState({ exercise:'', sets:'', reps:'', weight:'', date:TODAY });
+  // schemas
+  const [showSchemaModal, setShowSchemaModal] = useState(false);
+  const [newSchema, setNewSchema] = useState({ name:'' });
+  // exercises
+  const [bodyPartFilter, setBodyPartFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [exSearch, setExSearch] = useState('');
+  const [showAddExModal, setShowAddExModal] = useState(false);
+  const [newExForm, setNewExForm] = useState({ name:'', bodyPart:'Chest', category:'Barbell' });
+  const [addToSchemaEx, setAddToSchemaEx] = useState(null);
+  // progress
   const [chartExercise, setChartExercise] = useState('');
-  const exercises = useMemo(()=>[...new Set(workoutSessions.map(w=>w.exercise))].sort(),[workoutSessions]);
+
+  const loggedExercises = useMemo(()=>[...new Set(workoutSessions.map(w=>w.exercise))].sort(),[workoutSessions]);
   const chartData = useMemo(()=>{
     if(!chartExercise)return[];
     return workoutSessions.filter(w=>w.exercise===chartExercise).sort((a,b)=>a.date.localeCompare(b.date)).map(w=>({date:w.date.slice(5),value:parseFloat(w.weight)||0}));
   },[workoutSessions,chartExercise]);
+
+  // Combined + filtered exercise list
+  const allExercises = useMemo(()=>[
+    ...EXERCISE_DB.map((e,i)=>({...e,id:`b${i}`,custom:false})),
+    ...customExercises.map(e=>({...e,custom:true})),
+  ],[customExercises]);
+
+  const filteredExercises = useMemo(()=>{
+    const q = exSearch.toLowerCase();
+    return allExercises.filter(e=>
+      (bodyPartFilter==='All'||e.bodyPart===bodyPartFilter)&&
+      (categoryFilter==='All'||e.category===categoryFilter)&&
+      (!q||e.name.toLowerCase().includes(q)||e.bodyPart.toLowerCase().includes(q))
+    );
+  },[allExercises,bodyPartFilter,categoryFilter,exSearch]);
+
   const addSchema=()=>{
     if(!newSchema.name.trim())return;
-    const s={id:Date.now(),name:newSchema.name.trim(),exercises:newSchema.exercises.split(',').map(e=>e.trim()).filter(Boolean)};
+    const s={id:Date.now(),name:newSchema.name.trim(),exercises:[]};
     setWorkoutSchemas(prev=>{const n=[...prev,s];save('workoutSchemas',n);return n;});
-    setNewSchema({name:'',exercises:''});setShowSchemaModal(false);
+    setNewSchema({name:''});setShowSchemaModal(false);
   };
   const deleteSchema=id=>setWorkoutSchemas(prev=>{const n=prev.filter(s=>s.id!==id);save('workoutSchemas',n);return n;});
+  const removeFromSchema=(schemaId,exIdx)=>setWorkoutSchemas(prev=>{
+    const n=prev.map(s=>s.id===schemaId?{...s,exercises:s.exercises.filter((_,i)=>i!==exIdx)}:s);
+    save('workoutSchemas',n);return n;
+  });
+
+  const addExToSchema=(schemaId,exName)=>{
+    setWorkoutSchemas(prev=>{
+      const n=prev.map(s=>s.id===schemaId&&!s.exercises.includes(exName)?{...s,exercises:[...s.exercises,exName]}:s);
+      save('workoutSchemas',n);return n;
+    });
+    setAddToSchemaEx(null);
+  };
+
   const logWorkout=()=>{
     if(!logForm.exercise.trim())return;
     const w={id:Date.now(),...logForm,exercise:logForm.exercise.trim()};
@@ -627,17 +787,30 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
   };
   const deleteSession=id=>setWorkoutSessions(prev=>{const n=prev.filter(s=>s.id!==id);save('workoutSessions',n);return n;});
   const grouped=useMemo(()=>[...new Set(workoutSessions.map(w=>w.date))].sort().reverse().map(date=>({date,sessions:workoutSessions.filter(w=>w.date===date)})),[workoutSessions]);
+
+  const addCustomEx=()=>{
+    if(!newExForm.name.trim())return;
+    const e={id:Date.now(),name:newExForm.name.trim(),bodyPart:newExForm.bodyPart,category:newExForm.category,custom:true};
+    setCustomExercises(prev=>{const n=[...prev,e];save('customExercises',n);return n;});
+    setNewExForm({name:'',bodyPart:'Chest',category:'Barbell'});setShowAddExModal(false);
+  };
+  const deleteCustomEx=id=>setCustomExercises(prev=>{const n=prev.filter(e=>e.id!==id);save('customExercises',n);return n;});
+
   return (
     <div className="section">
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24,flexWrap:'wrap',gap:10}}>
         <div className="section-title">Gym</div>
-        <button className="btn btn-primary btn-sm" onClick={()=>setShowLogModal(true)}><Icon name="plus" size={15}/>Log Workout</button>
+        {tab==='log'       && <button className="btn btn-primary btn-sm" onClick={()=>setShowLogModal(true)}><Icon name="plus" size={15}/>Log Workout</button>}
+        {tab==='exercises' && <button className="btn btn-ghost btn-sm" onClick={()=>setShowAddExModal(true)}><Icon name="plus" size={15}/>Add Exercise</button>}
       </div>
+
       <div className="tab-bar">
-        {[['log','Log'],['schemas','Schemas'],['progress','Progress']].map(([id,label])=>(
+        {[['log','Log'],['schemas','Schemas'],['exercises','Exercises'],['progress','Progress']].map(([id,label])=>(
           <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>
         ))}
       </div>
+
+      {/* ── LOG ── */}
       {tab==='log'&&<div className="col">
         {grouped.length===0&&<div className="empty-state">No workouts logged yet</div>}
         {grouped.map(({date,sessions})=>(
@@ -655,48 +828,103 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
             </div>
           </div>))}
       </div>}
+
+      {/* ── SCHEMAS ── */}
       {tab==='schemas'&&<div className="col">
         <button className="btn btn-ghost" style={{width:'fit-content'}} onClick={()=>setShowSchemaModal(true)}><Icon name="plus" size={16}/>New Schema</button>
-        {workoutSchemas.length===0&&<div className="empty-state">Create workout schemas like Push / Pull / Legs</div>}
-        <div className="grid-2">
+        {workoutSchemas.length===0&&<div className="empty-state">Create schemas like Push / Pull / Legs, then add exercises from the Exercises tab</div>}
+        <div className="col">
           {workoutSchemas.map(s=>(
             <div key={s.id} className="card">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                 <div style={{fontSize:16,fontWeight:700}}>{s.name}</div>
                 <button className="btn btn-icon btn-danger" onClick={()=>deleteSchema(s.id)}><Icon name="trash" size={15}/></button>
               </div>
-              {s.exercises.length===0?<div style={{fontSize:12,color:'var(--text3)'}}>No exercises</div>
-                :<div style={{display:'flex',flexWrap:'wrap',gap:6}}>{s.exercises.map((e,i)=><span key={i} className="badge badge-gray">{e}</span>)}</div>}
+              {s.exercises.length===0
+                ? <div style={{fontSize:12,color:'var(--text3)'}}>No exercises yet — go to Exercises tab and tap + to add</div>
+                : <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                    {s.exercises.map((e,i)=>(
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:4,background:'var(--bg4)',borderRadius:99,paddingLeft:10,paddingRight:4,paddingTop:3,paddingBottom:3}}>
+                        <span style={{fontSize:12,fontWeight:500,color:'var(--text2)'}}>{e}</span>
+                        <button onClick={()=>removeFromSchema(s.id,i)} style={{display:'flex',alignItems:'center',color:'var(--text3)',cursor:'pointer',padding:2,borderRadius:'50%',background:'none',border:'none'}}><Icon name="close" size={11}/></button>
+                      </div>
+                    ))}
+                  </div>}
             </div>))}
         </div>
       </div>}
+
+      {/* ── EXERCISES ── */}
+      {tab==='exercises'&&<div className="col">
+        {/* Search */}
+        <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises…" style={{marginBottom:4}}/>
+
+        {/* Body Part filter */}
+        <FilterRow label="Body Part" options={BODY_PARTS} value={bodyPartFilter} onChange={setBodyPartFilter}/>
+
+        {/* Category filter */}
+        <FilterRow label="Category" options={CATEGORIES} value={categoryFilter} onChange={setCategoryFilter}/>
+
+        {/* Results count */}
+        <div style={{fontSize:12,color:'var(--text3)'}}>{filteredExercises.length} exercise{filteredExercises.length!==1?'s':''}</div>
+
+        {/* Exercise cards */}
+        {filteredExercises.length===0
+          ? <div className="empty-state">No exercises match your filters</div>
+          : <div className="col" style={{gap:8}}>
+              {filteredExercises.map(ex=>(
+                <div key={ex.id} className="card" style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px'}}>
+                  <div style={{width:4,alignSelf:'stretch',borderRadius:2,background:bodyPartColor[ex.bodyPart]||'var(--border)',flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                      {ex.name}
+                      {ex.custom&&<span style={{fontSize:10,background:'var(--accent-dim)',color:'var(--accent)',borderRadius:4,padding:'1px 5px',fontWeight:600}}>custom</span>}
+                    </div>
+                    <div style={{display:'flex',gap:6,marginTop:5,flexWrap:'wrap'}}>
+                      <span style={{fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:99,background:bodyPartColor[ex.bodyPart]+'22',color:bodyPartColor[ex.bodyPart]||'var(--text2)'}}>{ex.bodyPart}</span>
+                      <span style={{fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:99,background:'var(--bg4)',color:'var(--text2)'}}>{ex.category}</span>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:6,flexShrink:0}}>
+                    {ex.custom&&<button className="btn btn-icon btn-danger" style={{padding:6}} onClick={()=>deleteCustomEx(ex.id)}><Icon name="trash" size={13}/></button>}
+                    <button className="btn btn-icon btn-ghost" style={{padding:6}} title="Add to schema" onClick={()=>setAddToSchemaEx(ex)}>
+                      <Icon name="plus" size={15}/>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>}
+      </div>}
+
+      {/* ── PROGRESS ── */}
       {tab==='progress'&&<div className="col">
         <div className="card">
           <div className="card-title">Exercise Progress</div>
-          {exercises.length===0?<div className="empty-state">Log workouts to track progress</div>:<>
+          {loggedExercises.length===0?<div className="empty-state">Log workouts to track progress</div>:<>
             <select value={chartExercise} onChange={e=>setChartExercise(e.target.value)} style={{marginBottom:20}}>
               <option value="">— Select exercise —</option>
-              {exercises.map(e=><option key={e} value={e}>{e}</option>)}
+              {loggedExercises.map(e=><option key={e} value={e}>{e}</option>)}
             </select>
             {chartExercise&&<><LineChart data={chartData} label={chartExercise}/><div style={{fontSize:11,color:'var(--text3)',marginTop:8,textAlign:'center',fontFamily:'var(--mono)'}}>Weight (kg) over time</div></>}
           </>}
         </div>
       </div>}
-      {showSchemaModal&&<Modal title="New Workout Schema" onClose={()=>setShowSchemaModal(false)}>
+
+      {/* ── MODALS ── */}
+      {showSchemaModal&&<Modal title="New Schema" onClose={()=>setShowSchemaModal(false)}>
         <div className="col">
           <div className="form-group"><label className="form-label">Schema Name</label>
             <input value={newSchema.name} onChange={e=>setNewSchema(p=>({...p,name:e.target.value}))} placeholder="Push Day" autoFocus onKeyDown={e=>e.key==='Enter'&&addSchema()}/></div>
-          <div className="form-group"><label className="form-label">Exercises (comma-separated)</label>
-            <input value={newSchema.exercises} onChange={e=>setNewSchema(p=>({...p,exercises:e.target.value}))} placeholder="Bench Press, Shoulder Press" onKeyDown={e=>e.key==='Enter'&&addSchema()}/></div>
-          <button className="btn btn-primary" onClick={addSchema}>Save Schema</button>
+          <button className="btn btn-primary" onClick={addSchema}>Create Schema</button>
         </div>
       </Modal>}
+
       {showLogModal&&<Modal title="Log Workout" onClose={()=>setShowLogModal(false)}>
         <div className="col">
           <div className="form-row">
             <div className="form-group"><label className="form-label">Exercise</label>
               <input value={logForm.exercise} onChange={e=>setLogForm(p=>({...p,exercise:e.target.value}))} placeholder="Bench Press" list="ex-list" autoFocus/>
-              <datalist id="ex-list">{exercises.map(e=><option key={e} value={e}/>)}</datalist></div>
+              <datalist id="ex-list">{[...loggedExercises,...allExercises.map(e=>e.name)].filter((v,i,a)=>a.indexOf(v)===i).map(e=><option key={e} value={e}/>)}</datalist></div>
             <div className="form-group"><label className="form-label">Date</label>
               <input type="date" value={logForm.date} onChange={e=>setLogForm(p=>({...p,date:e.target.value}))}/></div>
           </div>
@@ -710,6 +938,48 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
           </div>
           <button className="btn btn-primary" onClick={logWorkout}>Log Workout</button>
         </div>
+      </Modal>}
+
+      {showAddExModal&&<Modal title="Add Custom Exercise" onClose={()=>setShowAddExModal(false)}>
+        <div className="col">
+          <div className="form-group"><label className="form-label">Exercise name</label>
+            <input value={newExForm.name} onChange={e=>setNewExForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Cable Fly" autoFocus onKeyDown={e=>e.key==='Enter'&&addCustomEx()}/></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Body Part</label>
+              <select value={newExForm.bodyPart} onChange={e=>setNewExForm(p=>({...p,bodyPart:e.target.value}))}>
+                {BODY_PARTS.filter(b=>b!=='All').map(b=><option key={b} value={b}>{b}</option>)}
+              </select></div>
+            <div className="form-group"><label className="form-label">Category</label>
+              <select value={newExForm.category} onChange={e=>setNewExForm(p=>({...p,category:e.target.value}))}>
+                {CATEGORIES.filter(c=>c!=='All').map(c=><option key={c} value={c}>{c}</option>)}
+              </select></div>
+          </div>
+          <button className="btn btn-primary" onClick={addCustomEx}>Add Exercise</button>
+        </div>
+      </Modal>}
+
+      {addToSchemaEx&&<Modal title={`Add "${addToSchemaEx.name}" to schema`} onClose={()=>setAddToSchemaEx(null)}>
+        {workoutSchemas.length===0
+          ? <div style={{textAlign:'center',padding:'20px 0'}}>
+              <div style={{color:'var(--text3)',fontSize:13,marginBottom:16}}>You have no schemas yet.</div>
+              <button className="btn btn-primary" onClick={()=>{setAddToSchemaEx(null);setShowSchemaModal(true);}}>Create a Schema first</button>
+            </div>
+          : <div className="col" style={{gap:8}}>
+              {workoutSchemas.map(s=>{
+                const already = s.exercises.includes(addToSchemaEx.name);
+                return (
+                  <button key={s.id} onClick={()=>!already&&addExToSchema(s.id,addToSchemaEx.name)}
+                    style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',borderRadius:'var(--radius-sm)',
+                      border:`1px solid ${already?'var(--accent-border)':'var(--border)'}`,
+                      background:already?'var(--accent-dim)':'var(--bg3)',cursor:already?'default':'pointer',transition:'all 0.15s',width:'100%',textAlign:'left'}}>
+                    <span style={{fontSize:14,fontWeight:500,color:already?'var(--accent)':'var(--text)'}}>{s.name}</span>
+                    {already
+                      ? <span style={{fontSize:11,color:'var(--accent)',display:'flex',alignItems:'center',gap:4}}><Icon name="check" size={13}/>Added</span>
+                      : <span style={{fontSize:11,color:'var(--text3)'}}>Tap to add</span>}
+                  </button>
+                );
+              })}
+            </div>}
       </Modal>}
     </div>
   );
@@ -1146,8 +1416,9 @@ const App = () => {
   const [weightLogs,      setWeightLogs]      = useState(()=>ls.get('weightLogs',[]));
   const [checkIns,        setCheckIns]        = useState(()=>ls.get('checkIns',[]));
   const [activeDays,      setActiveDays]      = useState(()=>ls.get('activeDays',[]));
-  const [habits,          setHabits]          = useState(()=>ls.get('habits',[]));
-  const [habitLogs,       setHabitLogs]       = useState(()=>ls.get('habitLogs',{}));
+  const [habits,           setHabits]           = useState(()=>ls.get('habits',[]));
+  const [habitLogs,        setHabitLogs]        = useState(()=>ls.get('habitLogs',{}));
+  const [customExercises,  setCustomExercises]  = useState(()=>ls.get('customExercises',[]));
 
   const applyCloud = useCallback(cloud => {
     if (!cloud) return;
@@ -1160,8 +1431,9 @@ const App = () => {
     apply('weightLogs',      setWeightLogs);
     apply('checkIns',        setCheckIns);
     apply('activeDays',      setActiveDays);
-    apply('habits',          setHabits);
-    apply('habitLogs',       setHabitLogs);
+    apply('habits',           setHabits);
+    apply('habitLogs',        setHabitLogs);
+    apply('customExercises',  setCustomExercises);
   }, []);
 
   const handleAuth = useCallback(async user => {
@@ -1234,7 +1506,7 @@ const App = () => {
 
       <main className="main">
         {activeSection==='home'     && <HomeSection allData={allData} signOut={signOut} userEmail={user?.email}/>}
-        {activeSection==='gym'      && <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} markActive={markActive}/>}
+        {activeSection==='gym'      && <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} customExercises={customExercises} setCustomExercises={setCustomExercises} markActive={markActive}/>}
         {activeSection==='food'     && <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} markActive={markActive}/>}
         {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} markActive={markActive}/>}
         {activeSection==='progress' && <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive}/>}
