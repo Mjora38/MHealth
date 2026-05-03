@@ -719,12 +719,72 @@ const FilterRow = ({ label, options, value, onChange }) => (
   </div>
 );
 
+// ── Rest Timer component ───────────────────────────────────────────────────
+const RestTimer = () => {
+  const [seconds, setSeconds] = useState(0);
+  const [total, setTotal] = useState(90);
+  const [running, setRunning] = useState(false);
+  const tickRef = useRef(null);
+
+  const start = t => {
+    clearInterval(tickRef.current);
+    setTotal(t); setSeconds(t); setRunning(true);
+    tickRef.current = setInterval(() => {
+      setSeconds(s => {
+        if (s <= 1) {
+          clearInterval(tickRef.current);
+          setRunning(false);
+          if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const stop = () => { clearInterval(tickRef.current); setRunning(false); setSeconds(0); };
+  useEffect(() => () => clearInterval(tickRef.current), []);
+
+  const pct = total > 0 ? ((total - seconds) / total) : 0;
+  const mins = Math.floor(seconds / 60), secs = seconds % 60;
+  const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
+  const urgent = seconds > 0 && seconds <= 10;
+
+  return (
+    <div className="card" style={{padding:'14px 16px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'0.8px'}}>⏱ Rest Timer</div>
+        {running && <button className="btn btn-danger btn-sm" onClick={stop}>Stop</button>}
+      </div>
+      {running ? (
+        <>
+          <div style={{fontSize:36,fontWeight:700,fontFamily:'var(--mono)',color:urgent?'var(--red)':'var(--accent)',textAlign:'center',marginBottom:10,transition:'color 0.3s'}}>{timeStr}</div>
+          <div style={{height:6,background:'var(--bg4)',borderRadius:3,overflow:'hidden',marginBottom:4}}>
+            <div style={{height:'100%',borderRadius:3,background:urgent?'var(--red)':'var(--accent)',width:`${pct*100}%`,transition:'width 1s linear, background 0.3s'}}/>
+          </div>
+          <div style={{fontSize:11,color:'var(--text3)',textAlign:'right',fontFamily:'var(--mono)'}}>{seconds}s left</div>
+        </>
+      ) : (
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          {[30,60,90,120].map(t => (
+            <button key={t} className="btn btn-ghost btn-sm" onClick={()=>start(t)} style={{flex:1,justifyContent:'center',minWidth:52}}>
+              {t < 60 ? `${t}s` : `${t/60}:00`}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── GYM ───────────────────────────────────────────────────────────────────
 const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWorkoutSessions, customExercises, setCustomExercises, markActive }) => {
   const [tab, setTab] = useState('log');
   // log
   const [showLogModal, setShowLogModal] = useState(false);
   const [logForm, setLogForm] = useState({ exercise:'', sets:'', reps:'', weight:'', date:TODAY });
+  // schema workout
+  const [schemaWorkout, setSchemaWorkout] = useState(null); // { schema, date, entries:[{exercise,sets,reps,weight}] }
   // schemas
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [newSchema, setNewSchema] = useState({ name:'' });
@@ -737,12 +797,52 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
   const [addToSchemaEx, setAddToSchemaEx] = useState(null);
   // progress
   const [chartExercise, setChartExercise] = useState('');
+  const [chartMode, setChartMode] = useState('weight'); // 'weight' | 'volume'
 
   const loggedExercises = useMemo(()=>[...new Set(workoutSessions.map(w=>w.exercise))].sort(),[workoutSessions]);
+
+  // PR map: exercise → { weight, date }
+  const prMap = useMemo(()=>{
+    const m = {};
+    workoutSessions.forEach(s=>{
+      const w = parseFloat(s.weight)||0;
+      if (!m[s.exercise] || w > m[s.exercise].weight)
+        m[s.exercise] = { weight: w, date: s.date, id: s.id };
+    });
+    return m;
+  },[workoutSessions]);
+
   const chartData = useMemo(()=>{
     if(!chartExercise)return[];
-    return workoutSessions.filter(w=>w.exercise===chartExercise).sort((a,b)=>a.date.localeCompare(b.date)).map(w=>({date:w.date.slice(5),value:parseFloat(w.weight)||0}));
-  },[workoutSessions,chartExercise]);
+    const sessions = workoutSessions.filter(w=>w.exercise===chartExercise).sort((a,b)=>a.date.localeCompare(b.date));
+    const byDate = {};
+    sessions.forEach(s=>{
+      if(chartMode==='weight'){
+        const w=parseFloat(s.weight)||0;
+        if(!byDate[s.date]||w>byDate[s.date]) byDate[s.date]=w;
+      } else {
+        const vol=(parseInt(s.sets)||0)*(parseInt(s.reps)||0)*(parseFloat(s.weight)||0);
+        byDate[s.date]=(byDate[s.date]||0)+vol;
+      }
+    });
+    return Object.entries(byDate).map(([date,value])=>({date:date.slice(5),value:chartMode==='volume'?Math.round(value):value}));
+  },[workoutSessions,chartExercise,chartMode]);
+
+  // Monthly stats
+  const stats = useMemo(()=>{
+    const month = new Date().toISOString().slice(0,7);
+    const ms = workoutSessions.filter(s=>s.date.startsWith(month));
+    const days = new Set(ms.map(s=>s.date)).size;
+    const exCount = {};
+    ms.forEach(s=>{ exCount[s.exercise]=(exCount[s.exercise]||0)+1; });
+    const topEx = Object.entries(exCount).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const allEx = [...EXERCISE_DB,...customExercises];
+    const bpCount = {};
+    ms.forEach(s=>{ const ex=allEx.find(e=>e.name===s.exercise); if(ex) bpCount[ex.bodyPart]=(bpCount[ex.bodyPart]||0)+1; });
+    const topBP = Object.entries(bpCount).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const vol = Math.round(ms.reduce((sum,s)=>sum+(parseInt(s.sets)||0)*(parseInt(s.reps)||0)*(parseFloat(s.weight)||0),0));
+    return { days, topEx, topBP, vol };
+  },[workoutSessions,customExercises]);
 
   // Combined + filtered exercise list
   const allExercises = useMemo(()=>[
@@ -779,12 +879,34 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
     setAddToSchemaEx(null);
   };
 
+  // Detect PR when logging
+  const detectPR = (exercise, weight) => {
+    const prev = workoutSessions.filter(s=>s.exercise===exercise);
+    const prevMax = prev.reduce((m,s)=>Math.max(m,parseFloat(s.weight)||0),0);
+    return prev.length > 0 && (parseFloat(weight)||0) > prevMax;
+  };
+
   const logWorkout=()=>{
     if(!logForm.exercise.trim())return;
-    const w={id:Date.now(),...logForm,exercise:logForm.exercise.trim()};
+    const isPR = detectPR(logForm.exercise.trim(), logForm.weight);
+    const w={id:Date.now(),...logForm,exercise:logForm.exercise.trim(),isPR};
     setWorkoutSessions(prev=>{const n=[...prev,w];save('workoutSessions',n);return n;});
     markActive(logForm.date);setLogForm({exercise:'',sets:'',reps:'',weight:'',date:TODAY});setShowLogModal(false);
   };
+
+  const logSchemaWorkout=()=>{
+    if(!schemaWorkout)return;
+    const newSessions = schemaWorkout.entries
+      .filter(e=>e.exercise&&(e.sets||e.reps||e.weight))
+      .map(e=>({ id:Date.now()+Math.random(), exercise:e.exercise, sets:e.sets, reps:e.reps, weight:e.weight, date:schemaWorkout.date, isPR:detectPR(e.exercise,e.weight) }));
+    if(!newSessions.length)return;
+    setWorkoutSessions(prev=>{const n=[...prev,...newSessions];save('workoutSessions',n);return n;});
+    markActive(schemaWorkout.date);
+    setSchemaWorkout(null);
+  };
+
+  const updateSchemaEntry=(idx,field,val)=>setSchemaWorkout(sw=>({...sw,entries:sw.entries.map((e,i)=>i===idx?{...e,[field]:val}:e)}));
+
   const deleteSession=id=>setWorkoutSessions(prev=>{const n=prev.filter(s=>s.id!==id);save('workoutSessions',n);return n;});
   const grouped=useMemo(()=>[...new Set(workoutSessions.map(w=>w.date))].sort().reverse().map(date=>({date,sessions:workoutSessions.filter(w=>w.date===date)})),[workoutSessions]);
 
@@ -812,15 +934,46 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
 
       {/* ── LOG ── */}
       {tab==='log'&&<div className="col">
-        {grouped.length===0&&<div className="empty-state">No workouts logged yet</div>}
+        {/* Rest Timer */}
+        <RestTimer/>
+
+        {/* Monthly Stats */}
+        {workoutSessions.length > 0 && (
+          <div className="card" style={{padding:'14px 16px'}}>
+            <div className="card-title" style={{marginBottom:12}}>This Month</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,textAlign:'center'}}>
+              <div>
+                <div style={{fontSize:22,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{stats.days}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>sessions</div>
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={stats.topEx||'—'}>{stats.topEx||'—'}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>top exercise</div>
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:stats.topBP?bodyPartColor[stats.topBP]:'var(--text)'}}>{stats.topBP||'—'}</div>
+                <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>top body part</div>
+              </div>
+            </div>
+            {stats.vol > 0 && <div style={{marginTop:12,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <span style={{fontSize:12,color:'var(--text3)'}}>Total volume</span>
+              <span style={{fontSize:13,fontWeight:600,fontFamily:'var(--mono)',color:'var(--text)'}}>{stats.vol.toLocaleString()} kg</span>
+            </div>}
+          </div>
+        )}
+
+        {grouped.length===0&&<div className="empty-state">No workouts logged yet — tap "Log Workout" to start</div>}
         {grouped.map(({date,sessions})=>(
           <div key={date} className="card">
             <div className="card-title">{new Date(date+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>
             <div className="col" style={{gap:8}}>
               {sessions.map(w=>(
-                <div key={w.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                <div key={w.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{w.exercise}</div>
+                    <div style={{fontSize:14,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:6}}>
+                      {w.exercise}
+                      {w.isPR && <span style={{fontSize:10,background:'#f5a62322',color:'#f5a623',borderRadius:4,padding:'1px 5px',fontWeight:700,flexShrink:0}}>🏆 PR</span>}
+                    </div>
                     <div style={{fontSize:11,color:'var(--text2)',fontFamily:'var(--mono)',marginTop:1}}>{w.sets}×{w.reps} @ {w.weight}kg</div>
                   </div>
                   <button className="btn btn-icon btn-danger" onClick={()=>deleteSession(w.id)}><Icon name="trash" size={15}/></button>
@@ -838,7 +991,15 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
             <div key={s.id} className="card">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                 <div style={{fontSize:16,fontWeight:700}}>{s.name}</div>
-                <button className="btn btn-icon btn-danger" onClick={()=>deleteSchema(s.id)}><Icon name="trash" size={15}/></button>
+                <div style={{display:'flex',gap:8}}>
+                  {s.exercises.length > 0 && (
+                    <button className="btn btn-primary btn-sm"
+                      onClick={()=>setSchemaWorkout({schema:s, date:TODAY, entries:s.exercises.map(e=>({exercise:e,sets:'',reps:'',weight:''}))})}>
+                      Start Workout
+                    </button>
+                  )}
+                  <button className="btn btn-icon btn-danger" onClick={()=>deleteSchema(s.id)}><Icon name="trash" size={15}/></button>
+                </div>
               </div>
               {s.exercises.length===0
                 ? <div style={{fontSize:12,color:'var(--text3)'}}>No exercises yet — go to Exercises tab and tap + to add</div>
@@ -856,19 +1017,10 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
 
       {/* ── EXERCISES ── */}
       {tab==='exercises'&&<div className="col">
-        {/* Search */}
-        <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises…" style={{marginBottom:4}}/>
-
-        {/* Body Part filter */}
+        <input value={exSearch} onChange={e=>setExSearch(e.target.value)} placeholder="Search exercises…"/>
         <FilterRow label="Body Part" options={BODY_PARTS} value={bodyPartFilter} onChange={setBodyPartFilter}/>
-
-        {/* Category filter */}
         <FilterRow label="Category" options={CATEGORIES} value={categoryFilter} onChange={setCategoryFilter}/>
-
-        {/* Results count */}
         <div style={{fontSize:12,color:'var(--text3)'}}>{filteredExercises.length} exercise{filteredExercises.length!==1?'s':''}</div>
-
-        {/* Exercise cards */}
         {filteredExercises.length===0
           ? <div className="empty-state">No exercises match your filters</div>
           : <div className="col" style={{gap:8}}>
@@ -879,6 +1031,7 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
                     <div style={{fontSize:14,fontWeight:600,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                       {ex.name}
                       {ex.custom&&<span style={{fontSize:10,background:'var(--accent-dim)',color:'var(--accent)',borderRadius:4,padding:'1px 5px',fontWeight:600}}>custom</span>}
+                      {prMap[ex.name]&&<span style={{fontSize:10,background:'#f5a62322',color:'#f5a623',borderRadius:4,padding:'1px 5px',fontWeight:700}}>🏆 {prMap[ex.name].weight}kg</span>}
                     </div>
                     <div style={{display:'flex',gap:6,marginTop:5,flexWrap:'wrap'}}>
                       <span style={{fontSize:11,fontWeight:500,padding:'2px 8px',borderRadius:99,background:bodyPartColor[ex.bodyPart]+'22',color:bodyPartColor[ex.bodyPart]||'var(--text2)'}}>{ex.bodyPart}</span>
@@ -887,9 +1040,7 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
                   </div>
                   <div style={{display:'flex',gap:6,flexShrink:0}}>
                     {ex.custom&&<button className="btn btn-icon btn-danger" style={{padding:6}} onClick={()=>deleteCustomEx(ex.id)}><Icon name="trash" size={13}/></button>}
-                    <button className="btn btn-icon btn-ghost" style={{padding:6}} title="Add to schema" onClick={()=>setAddToSchemaEx(ex)}>
-                      <Icon name="plus" size={15}/>
-                    </button>
+                    <button className="btn btn-icon btn-ghost" style={{padding:6}} onClick={()=>setAddToSchemaEx(ex)}><Icon name="plus" size={15}/></button>
                   </div>
                 </div>
               ))}
@@ -898,14 +1049,48 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
 
       {/* ── PROGRESS ── */}
       {tab==='progress'&&<div className="col">
+        {/* PR board */}
+        {Object.keys(prMap).length > 0 && (
+          <div className="card">
+            <div className="card-title">Personal Records 🏆</div>
+            <div className="col" style={{gap:6}}>
+              {Object.entries(prMap).sort((a,b)=>b[1].weight-a[1].weight).slice(0,8).map(([ex,pr])=>(
+                <div key={ex} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{fontSize:13,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex}</span>
+                  <span style={{fontSize:13,fontWeight:700,fontFamily:'var(--mono)',color:'#f5a623',flexShrink:0}}>{pr.weight} kg</span>
+                  <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',flexShrink:0}}>{pr.date.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="card">
-          <div className="card-title">Exercise Progress</div>
-          {loggedExercises.length===0?<div className="empty-state">Log workouts to track progress</div>:<>
-            <select value={chartExercise} onChange={e=>setChartExercise(e.target.value)} style={{marginBottom:20}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <div className="card-title" style={{marginBottom:0}}>Progress Chart</div>
+            <div style={{display:'flex',gap:4,background:'var(--bg3)',padding:3,borderRadius:8}}>
+              {[['weight','Weight'],['volume','Volume']].map(([m,l])=>(
+                <button key={m} onClick={()=>setChartMode(m)}
+                  style={{padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:500,cursor:'pointer',transition:'all 0.15s',
+                    background:chartMode===m?'var(--bg2)':'transparent',
+                    color:chartMode===m?'var(--text)':'var(--text3)',
+                    border:chartMode===m?'1px solid var(--border)':'1px solid transparent'}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {loggedExercises.length===0?<div className="empty-state">Log workouts to see your progress</div>:<>
+            <select value={chartExercise} onChange={e=>setChartExercise(e.target.value)} style={{marginBottom:16}}>
               <option value="">— Select exercise —</option>
               {loggedExercises.map(e=><option key={e} value={e}>{e}</option>)}
             </select>
-            {chartExercise&&<><LineChart data={chartData} label={chartExercise}/><div style={{fontSize:11,color:'var(--text3)',marginTop:8,textAlign:'center',fontFamily:'var(--mono)'}}>Weight (kg) over time</div></>}
+            {chartExercise&&<>
+              <LineChart data={chartData} label={chartExercise}/>
+              <div style={{fontSize:11,color:'var(--text3)',marginTop:8,textAlign:'center',fontFamily:'var(--mono)'}}>
+                {chartMode==='weight'?'Max weight (kg)':'Total volume (kg) per session'}
+              </div>
+            </>}
           </>}
         </div>
       </div>}
@@ -940,6 +1125,31 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
         </div>
       </Modal>}
 
+      {/* Schema workout modal */}
+      {schemaWorkout&&<Modal title={`${schemaWorkout.schema.name} — ${schemaWorkout.date}`} onClose={()=>setSchemaWorkout(null)}>
+        <div className="col">
+          <div className="form-group" style={{marginBottom:4}}>
+            <label className="form-label">Date</label>
+            <input type="date" value={schemaWorkout.date} onChange={e=>setSchemaWorkout(sw=>({...sw,date:e.target.value}))}/>
+          </div>
+          <div className="divider"/>
+          {schemaWorkout.entries.map((entry,idx)=>(
+            <div key={idx} style={{padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
+              <div style={{fontSize:14,fontWeight:600,marginBottom:10,color:'var(--text)'}}>{entry.exercise}</div>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Sets</label>
+                  <input type="number" min="1" value={entry.sets} onChange={e=>updateSchemaEntry(idx,'sets',e.target.value)} placeholder="3"/></div>
+                <div className="form-group"><label className="form-label">Reps</label>
+                  <input type="number" min="1" value={entry.reps} onChange={e=>updateSchemaEntry(idx,'reps',e.target.value)} placeholder="8"/></div>
+                <div className="form-group"><label className="form-label">Weight (kg)</label>
+                  <input type="number" min="0" step="0.5" value={entry.weight} onChange={e=>updateSchemaEntry(idx,'weight',e.target.value)} placeholder="80"/></div>
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-primary" style={{marginTop:8}} onClick={logSchemaWorkout}>Log All Exercises</button>
+        </div>
+      </Modal>}
+
       {showAddExModal&&<Modal title="Add Custom Exercise" onClose={()=>setShowAddExModal(false)}>
         <div className="col">
           <div className="form-group"><label className="form-label">Exercise name</label>
@@ -961,12 +1171,12 @@ const GymSection = ({ workoutSchemas, setWorkoutSchemas, workoutSessions, setWor
       {addToSchemaEx&&<Modal title={`Add "${addToSchemaEx.name}" to schema`} onClose={()=>setAddToSchemaEx(null)}>
         {workoutSchemas.length===0
           ? <div style={{textAlign:'center',padding:'20px 0'}}>
-              <div style={{color:'var(--text3)',fontSize:13,marginBottom:16}}>You have no schemas yet.</div>
+              <div style={{color:'var(--text3)',fontSize:13,marginBottom:16}}>No schemas yet.</div>
               <button className="btn btn-primary" onClick={()=>{setAddToSchemaEx(null);setShowSchemaModal(true);}}>Create a Schema first</button>
             </div>
           : <div className="col" style={{gap:8}}>
               {workoutSchemas.map(s=>{
-                const already = s.exercises.includes(addToSchemaEx.name);
+                const already=s.exercises.includes(addToSchemaEx.name);
                 return (
                   <button key={s.id} onClick={()=>!already&&addExToSchema(s.id,addToSchemaEx.name)}
                     style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',borderRadius:'var(--radius-sm)',
