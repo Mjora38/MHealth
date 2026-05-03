@@ -129,7 +129,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React;
 // ── Storage ────────────────────────────────────────────────────────────────
 let _uid = null;
 
-const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays'];
+const DATA_KEYS = ['workoutSchemas','workoutSessions','meals','favMeals','tasks','weightLogs','checkIns','activeDays','habits','habitLogs'];
 
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
@@ -794,87 +794,200 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, markActive }) => 
 };
 
 // ── PLANNING ──────────────────────────────────────────────────────────────
-const PlanningSection = ({ tasks, setTasks, markActive }) => {
-  const [tab, setTab] = useState('today');
+const PlanningSection = ({ tasks, setTasks, habits, setHabits, habitLogs, setHabitLogs, markActive }) => {
+  const [tab, setTab] = useState('calendar');
+  const [calMonth, setCalMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(TODAY);
-  const [form, setForm] = useState({ text:'', priority:'medium', date:TODAY });
-  const [showModal, setShowModal] = useState(false);
-  const todayTasks=tasks.filter(t=>t.date===selectedDate).sort((a,b)=>({high:0,medium:1,low:2}[a.priority]-{high:0,medium:1,low:2}[b.priority]));
-  const doneCount=todayTasks.filter(t=>t.done).length;
-  const addTask=()=>{
-    if(!form.text.trim())return;
-    const t={id:Date.now(),text:form.text.trim(),priority:form.priority,date:form.date,done:false};
-    setTasks(prev=>{const n=[...prev,t];save('tasks',n);return n;});
-    markActive(form.date);setForm({text:'',priority:'medium',date:TODAY});setShowModal(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showHabitModal, setShowHabitModal] = useState(false);
+  const [taskForm, setTaskForm] = useState({ text:'', priority:'medium' });
+  const [habitForm, setHabitForm] = useState('');
+
+  // Calendar grid
+  const year = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const calDays = useMemo(() => {
+    const days = Array(firstDay).fill(null);
+    for (let i = 1; i <= daysInMonth; i++)
+      days.push(`${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`);
+    return days;
+  }, [year, month, firstDay, daysInMonth]);
+
+  const selectedTasks = tasks
+    .filter(t => t.date === selectedDate)
+    .sort((a,b) => ({high:0,medium:1,low:2}[a.priority] - {high:0,medium:1,low:2}[b.priority]));
+  const doneCount = selectedTasks.filter(t => t.done).length;
+
+  const addTask = () => {
+    if (!taskForm.text.trim()) return;
+    const t = { id:Date.now(), text:taskForm.text.trim(), priority:taskForm.priority, date:selectedDate, done:false };
+    setTasks(prev => { const n=[...prev,t]; save('tasks',n); return n; });
+    markActive(selectedDate);
+    setTaskForm({ text:'', priority:'medium' }); setShowTaskModal(false);
   };
-  const toggleDone=id=>setTasks(prev=>{const n=prev.map(t=>t.id===id?{...t,done:!t.done}:t);save('tasks',n);return n;});
-  const deleteTask=id=>setTasks(prev=>{const n=prev.filter(t=>t.id!==id);save('tasks',n);return n;});
-  const weekStart=useMemo(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());return d;},[]);
-  const weekDays=useMemo(()=>Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d.toISOString().split('T')[0];}),[weekStart]);
-  const pClass=p=>p==='high'?'badge-red':p==='medium'?'badge-amber':'badge-gray';
-  const pColor=p=>p==='high'?'var(--red)':p==='medium'?'var(--amber)':'var(--text3)';
+  const toggleDone = id => setTasks(prev => { const n=prev.map(t=>t.id===id?{...t,done:!t.done}:t); save('tasks',n); return n; });
+  const deleteTask = id => setTasks(prev => { const n=prev.filter(t=>t.id!==id); save('tasks',n); return n; });
+
+  // Habits
+  const todayDone = habitLogs[TODAY] || [];
+  const addHabit = () => {
+    if (!habitForm.trim()) return;
+    setHabits(prev => { const n=[...prev,{id:Date.now(),text:habitForm.trim()}]; save('habits',n); return n; });
+    setHabitForm(''); setShowHabitModal(false);
+  };
+  const deleteHabit = id => setHabits(prev => { const n=prev.filter(h=>h.id!==id); save('habits',n); return n; });
+  const toggleHabit = id => setHabitLogs(prev => {
+    const day = prev[TODAY] || [];
+    const updated = day.includes(id) ? day.filter(i=>i!==id) : [...day, id];
+    const n = {...prev, [TODAY]: updated}; save('habitLogs',n); return n;
+  });
+
+  const pColor = p => p==='high'?'var(--red)':p==='medium'?'var(--amber)':'var(--text3)';
+  const pClass = p => p==='high'?'badge-red':p==='medium'?'badge-amber':'badge-gray';
+
   return (
     <div className="section">
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:24}}>
         <div className="section-title">Planning</div>
-        <button className="btn btn-primary btn-sm" onClick={()=>setShowModal(true)}><Icon name="plus" size={15}/>Add Task</button>
+        {tab==='calendar' && <button className="btn btn-primary btn-sm" onClick={()=>{setTaskForm({text:'',priority:'medium'});setShowTaskModal(true);}}><Icon name="plus" size={15}/>Add Task</button>}
+        {tab==='habits'   && <button className="btn btn-primary btn-sm" onClick={()=>setShowHabitModal(true)}><Icon name="plus" size={15}/>Add Habit</button>}
       </div>
+
       <div className="tab-bar">
-        {[['today','Daily'],['week','Weekly']].map(([id,label])=>(
+        {[['calendar','Calendar'],['habits','Daily Habits']].map(([id,label])=>(
           <button key={id} className={`tab-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>
         ))}
       </div>
-      {tab==='today'&&<div className="col">
-        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-          <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} style={{width:'auto',fontSize:13}}/>
-          {todayTasks.length>0&&<span style={{fontSize:12,color:'var(--text3)'}}>{doneCount}/{todayTasks.length} done{doneCount===todayTasks.length&&todayTasks.length>0&&' 🎉'}</span>}
+
+      {tab==='calendar' && <div className="col">
+        {/* Month nav */}
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setCalMonth(new Date(year,month-1,1))} style={{padding:'6px 10px',fontSize:18,lineHeight:1}}>‹</button>
+            <span style={{fontSize:15,fontWeight:700}}>{monthLabel}</span>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setCalMonth(new Date(year,month+1,1))} style={{padding:'6px 10px',fontSize:18,lineHeight:1}}>›</button>
+          </div>
+
+          {/* Weekday headers */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:6}}>
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>(
+              <div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:'var(--text3)',padding:'4px 0'}}>{d}</div>
+            ))}
+          </div>
+
+          {/* Day cells */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+            {calDays.map((date, i) => {
+              if (!date) return <div key={`e${i}`}/>;
+              const dayNum = parseInt(date.split('-')[2]);
+              const isToday = date === TODAY;
+              const isSelected = date === selectedDate;
+              const dayTasks = tasks.filter(t=>t.date===date);
+              const dots = dayTasks.slice(0,3);
+              return (
+                <div key={date} onClick={()=>setSelectedDate(date)}
+                  style={{textAlign:'center',padding:'6px 2px',borderRadius:8,cursor:'pointer',minHeight:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                    background: isSelected ? 'var(--accent-dim)' : isToday ? 'var(--bg4)' : 'transparent',
+                    border: `2px solid ${isSelected ? 'var(--accent)' : isToday ? 'var(--border)' : 'transparent'}`,
+                    transition:'all 0.12s'}}>
+                  <span style={{fontSize:13,fontWeight:isToday?700:400,color:isSelected?'var(--accent)':isToday?'var(--accent)':'var(--text)',lineHeight:1}}>{dayNum}</span>
+                  {dots.length > 0 && (
+                    <div style={{display:'flex',gap:2,marginTop:4,justifyContent:'center'}}>
+                      {dots.map(t=><div key={t.id} style={{width:4,height:4,borderRadius:'50%',background:pColor(t.priority),opacity:t.done?0.35:1}}/>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        {todayTasks.length===0?<div className="empty-state">No tasks for this day</div>
-          :<div className="col" style={{gap:8}}>{todayTasks.map(t=>(
-            <div key={t.id} className="card" style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',opacity:t.done?0.6:1,transition:'opacity 0.2s'}}>
-              <button onClick={()=>toggleDone(t.id)} style={{width:22,height:22,borderRadius:6,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
-                border:`2px solid ${t.done?'var(--accent)':'var(--border)'}`,background:t.done?'var(--accent)':'transparent',transition:'all 0.15s',cursor:'pointer'}}>
-                {t.done&&<Icon name="check" size={12}/>}
-              </button>
-              <span style={{flex:1,fontSize:14,textDecoration:t.done?'line-through':'none',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.text}</span>
-              <span className={`badge ${pClass(t.priority)}`} style={{flexShrink:0}}>{t.priority}</span>
-              <button className="btn btn-icon btn-danger" onClick={()=>deleteTask(t.id)}><Icon name="trash" size={14}/></button>
-            </div>))}</div>}
+
+        {/* Tasks for selected day */}
+        <div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>
+              {new Date(selectedDate+'T12:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
+              {selectedDate===TODAY && <span style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>today</span>}
+            </div>
+            {selectedTasks.length>0 && <span style={{fontSize:12,color:'var(--text3)'}}>{doneCount}/{selectedTasks.length}{doneCount===selectedTasks.length?' 🎉':''}</span>}
+          </div>
+          {selectedTasks.length===0
+            ? <div style={{textAlign:'center',padding:'20px',color:'var(--text3)',fontSize:13,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius)'}}>No tasks — tap "Add Task" to add one for this day</div>
+            : <div className="col" style={{gap:8}}>
+                {selectedTasks.map(t=>(
+                  <div key={t.id} className="card" style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',opacity:t.done?0.55:1,transition:'opacity 0.2s'}}>
+                    <button onClick={()=>toggleDone(t.id)} style={{width:22,height:22,borderRadius:6,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                      border:`2px solid ${t.done?'var(--accent)':'var(--border)'}`,background:t.done?'var(--accent)':'transparent',transition:'all 0.15s',cursor:'pointer'}}>
+                      {t.done&&<Icon name="check" size={12}/>}
+                    </button>
+                    <span style={{flex:1,fontSize:14,textDecoration:t.done?'line-through':'none',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.text}</span>
+                    <span className={`badge ${pClass(t.priority)}`} style={{flexShrink:0}}>{t.priority}</span>
+                    <button className="btn btn-icon btn-danger" onClick={()=>deleteTask(t.id)}><Icon name="trash" size={14}/></button>
+                  </div>
+                ))}
+              </div>}
+        </div>
       </div>}
-      {tab==='week'&&<div className="col">
-        {weekDays.map(date=>{
-          const dt=tasks.filter(t=>t.date===date);
-          const dn=new Date(date+'T12:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-          const it=date===TODAY;
-          return (
-            <div key={date} className="card" style={{borderColor:it?'var(--accent-border)':'var(--border)'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:dt.length?8:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:it?'var(--accent)':'var(--text)'}}>{dn}{it&&<span style={{color:'var(--text3)',fontWeight:400}}> · today</span>}</div>
-                <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>{dt.filter(t=>t.done).length}/{dt.length}</span>
+
+      {tab==='habits' && <div className="col">
+        {habits.length > 0 && (
+          <div style={{background:'var(--accent-dim)',border:'1px solid var(--accent-border)',borderRadius:12,padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:12,color:'var(--text2)',marginBottom:2}}>Today's Progress</div>
+              <div style={{fontSize:13,color:'var(--text3)'}}>
+                {todayDone.length === habits.length && habits.length > 0 ? '🎉 All done!' : `${todayDone.length} of ${habits.length} completed`}
               </div>
-              {dt.length===0?<div style={{fontSize:12,color:'var(--text3)'}}>—</div>
-                :<div style={{display:'flex',flexDirection:'column',gap:6}}>{dt.map(t=>(
-                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:8}}>
-                    <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:pColor(t.priority)}}/>
-                    <span style={{fontSize:12,flex:1,textDecoration:t.done?'line-through':'none',color:t.done?'var(--text3)':'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.text}</span>
-                  </div>))}</div>}
-            </div>);})}
+            </div>
+            <span style={{fontSize:32,fontWeight:700,fontFamily:'var(--mono)',color:'var(--accent)'}}>{todayDone.length}<span style={{fontSize:16,color:'var(--text3)'}}>/{habits.length}</span></span>
+          </div>
+        )}
+        {habits.length === 0
+          ? <div className="empty-state">No daily habits yet.<br/>Add things you want to do every single day.</div>
+          : <div className="col" style={{gap:8}}>
+              {habits.map(h => {
+                const done = todayDone.includes(h.id);
+                return (
+                  <div key={h.id} className="card" style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',
+                    opacity:done?0.65:1,transition:'all 0.2s',
+                    borderColor:done?'var(--accent-border)':'var(--border)'}}>
+                    <button onClick={()=>toggleHabit(h.id)} style={{width:24,height:24,borderRadius:6,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                      border:`2px solid ${done?'var(--accent)':'var(--border)'}`,background:done?'var(--accent)':'transparent',transition:'all 0.15s',cursor:'pointer'}}>
+                      {done && <Icon name="check" size={13}/>}
+                    </button>
+                    <span style={{flex:1,fontSize:14,textDecoration:done?'line-through':'none'}}>{h.text}</span>
+                    <button className="btn btn-icon btn-danger" onClick={()=>deleteHabit(h.id)}><Icon name="trash" size={14}/></button>
+                  </div>
+                );
+              })}
+            </div>}
       </div>}
-      {showModal&&<Modal title="Add Task" onClose={()=>setShowModal(false)}>
-        <div className="col">
-          <div className="form-group"><label className="form-label">Task</label>
-            <input value={form.text} onChange={e=>setForm(p=>({...p,text:e.target.value}))} placeholder="What do you need to do?" autoFocus onKeyDown={e=>e.key==='Enter'&&addTask()}/></div>
-          <div className="form-row">
+
+      {showTaskModal && (
+        <Modal title={`Add task — ${new Date(selectedDate+'T12:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}`} onClose={()=>setShowTaskModal(false)}>
+          <div className="col">
+            <div className="form-group"><label className="form-label">Task</label>
+              <input value={taskForm.text} onChange={e=>setTaskForm(p=>({...p,text:e.target.value}))} placeholder="What needs to be done?" autoFocus onKeyDown={e=>e.key==='Enter'&&addTask()}/></div>
             <div className="form-group"><label className="form-label">Priority</label>
-              <select value={form.priority} onChange={e=>setForm(p=>({...p,priority:e.target.value}))}>
+              <select value={taskForm.priority} onChange={e=>setTaskForm(p=>({...p,priority:e.target.value}))}>
                 <option value="high">🔴 High</option><option value="medium">🟡 Medium</option><option value="low">⚪ Low</option>
               </select></div>
-            <div className="form-group"><label className="form-label">Date</label>
-              <input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))}/></div>
+            <button className="btn btn-primary" onClick={addTask}>Add Task</button>
           </div>
-          <button className="btn btn-primary" onClick={addTask}>Add Task</button>
-        </div>
-      </Modal>}
+        </Modal>
+      )}
+
+      {showHabitModal && (
+        <Modal title="New Daily Habit" onClose={()=>setShowHabitModal(false)}>
+          <div className="col">
+            <div className="form-group"><label className="form-label">What do you want to do every day?</label>
+              <input value={habitForm} onChange={e=>setHabitForm(e.target.value)} placeholder="e.g. Drink 8 glasses of water" autoFocus onKeyDown={e=>e.key==='Enter'&&addHabit()}/></div>
+            <button className="btn btn-primary" onClick={addHabit}>Add Habit</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
@@ -1002,6 +1115,8 @@ const App = () => {
   const [weightLogs,      setWeightLogs]      = useState(()=>ls.get('weightLogs',[]));
   const [checkIns,        setCheckIns]        = useState(()=>ls.get('checkIns',[]));
   const [activeDays,      setActiveDays]      = useState(()=>ls.get('activeDays',[]));
+  const [habits,          setHabits]          = useState(()=>ls.get('habits',[]));
+  const [habitLogs,       setHabitLogs]       = useState(()=>ls.get('habitLogs',{}));
 
   const applyCloud = useCallback(cloud => {
     if (!cloud) return;
@@ -1014,6 +1129,8 @@ const App = () => {
     apply('weightLogs',      setWeightLogs);
     apply('checkIns',        setCheckIns);
     apply('activeDays',      setActiveDays);
+    apply('habits',          setHabits);
+    apply('habitLogs',       setHabitLogs);
   }, []);
 
   const handleAuth = useCallback(async user => {
@@ -1088,7 +1205,7 @@ const App = () => {
         {activeSection==='home'     && <HomeSection allData={allData} signOut={signOut} userEmail={user?.email}/>}
         {activeSection==='gym'      && <GymSection workoutSchemas={workoutSchemas} setWorkoutSchemas={setWorkoutSchemas} workoutSessions={workoutSessions} setWorkoutSessions={setWorkoutSessions} markActive={markActive}/>}
         {activeSection==='food'     && <FoodSection meals={meals} setMeals={setMeals} favMeals={favMeals} setFavMeals={setFavMeals} markActive={markActive}/>}
-        {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} markActive={markActive}/>}
+        {activeSection==='plan'     && <PlanningSection tasks={tasks} setTasks={setTasks} habits={habits} setHabits={setHabits} habitLogs={habitLogs} setHabitLogs={setHabitLogs} markActive={markActive}/>}
         {activeSection==='progress' && <ProgressSection weightLogs={weightLogs} setWeightLogs={setWeightLogs} checkIns={checkIns} setCheckIns={setCheckIns} markActive={markActive}/>}
       </main>
 
