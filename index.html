@@ -1214,9 +1214,29 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
   const [showAddModal, setShowAddModal] = useState(false);
   const [addSlot, setAddSlot] = useState('breakfast');
   const [mealForm, setMealForm] = useState({ name:'', calories:'', protein:'', carbs:'', fat:'' });
+  const [baseNutrition, setBaseNutrition] = useState(null); // per-serving values from DB
+  const [portionInput, setPortionInput] = useState('1');
   const [tab, setTab] = useState('plan');
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+
+  // Extract gram amount from food name e.g. "Chicken breast 100g" → 100
+  const extractGrams = name => { const m = name.match(/(\d+)\s*g\b/i); return m ? parseInt(m[1]) : null; };
+
+  const handlePortion = val => {
+    setPortionInput(val);
+    if (!baseNutrition) return;
+    const num = parseFloat(val);
+    if (!num || num <= 0) return;
+    const ratio = baseNutrition.grams ? num / baseNutrition.grams : num;
+    setMealForm(prev => ({
+      ...prev,
+      calories: Math.round(baseNutrition.cal * ratio),
+      protein:  Math.round(baseNutrition.p   * ratio),
+      carbs:    Math.round(baseNutrition.c   * ratio),
+      fat:      Math.round(baseNutrition.f   * ratio),
+    }));
+  };
 
   const SLOTS = ['breakfast','lunch','dinner','snacks'];
   const slotIcon = { breakfast:'☀️', lunch:'🌤️', dinner:'🌙', snacks:'🍎' };
@@ -1266,7 +1286,13 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
     return {avgCal,avgP,avgC,avgF};
   },[calHistory,meals]);
 
-  const openAdd = slot => { setAddSlot(slot); setMealForm({name:'',calories:'',protein:'',carbs:'',fat:''}); setShowAddModal(true); };
+  const openAdd = slot => {
+    setAddSlot(slot);
+    setMealForm({name:'',calories:'',protein:'',carbs:'',fat:''});
+    setBaseNutrition(null);
+    setPortionInput('1');
+    setShowAddModal(true);
+  };
 
   const addMeal = () => {
     if (!mealForm.name.trim()) return;
@@ -1458,27 +1484,50 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
           <div className="form-group">
             <label className="form-label">Food name</label>
             <FoodSearch value={mealForm.name}
-              onChange={name=>setMealForm(p=>({...p,name}))}
-              onSelect={(name,cal,pro,car,fat)=>setMealForm(prev=>({...prev,name,calories:cal,protein:pro,carbs:car,fat}))}
+              onChange={name=>{ setMealForm(p=>({...p,name})); setBaseNutrition(null); setPortionInput('1'); }}
+              onSelect={(name,cal,pro,car,fat)=>{
+                const grams = extractGrams(name);
+                setBaseNutrition({cal,p:pro,c:car,f:fat,grams});
+                setPortionInput(grams ? String(grams) : '1');
+                setMealForm(prev=>({...prev,name,calories:cal,protein:pro,carbs:car,fat}));
+              }}
               onKeyDown={e=>e.key==='Enter'&&addMeal()} autoFocus/>
           </div>
+
+          {/* Portion scaler — only shown when food is picked from DB */}
+          {baseNutrition&&(
+            <div className="form-group">
+              <label className="form-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span>{baseNutrition.grams ? 'Amount (g)' : 'Servings'}</span>
+                <span style={{fontSize:11,color:'var(--text3)',fontWeight:400}}>
+                  {baseNutrition.grams ? `${baseNutrition.grams}g = 1 serving` : '1 = as listed · 2 = double'}
+                </span>
+              </label>
+              <input type="number" min="1" step={baseNutrition.grams?'10':'0.5'} value={portionInput} onChange={e=>handlePortion(e.target.value)}/>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Calories</label>
-            <input type="number" min="0" value={mealForm.calories} onChange={e=>setMealForm(p=>({...p,calories:e.target.value}))} placeholder="kcal"/>
+            <input type="number" min="0" value={mealForm.calories}
+              onChange={e=>{ setBaseNutrition(null); setMealForm(p=>({...p,calories:e.target.value})); }} placeholder="kcal"/>
           </div>
           <div style={{fontSize:12,color:'var(--text3)',marginTop:-4}}>Macros (optional — auto-filled from database)</div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label" style={{color:'var(--blue)'}}>Protein (g)</label>
-              <input type="number" min="0" value={mealForm.protein} onChange={e=>setMealForm(p=>({...p,protein:e.target.value}))} placeholder="0"/>
+              <input type="number" min="0" value={mealForm.protein}
+                onChange={e=>{ setBaseNutrition(null); setMealForm(p=>({...p,protein:e.target.value})); }} placeholder="0"/>
             </div>
             <div className="form-group">
               <label className="form-label" style={{color:'var(--amber)'}}>Carbs (g)</label>
-              <input type="number" min="0" value={mealForm.carbs} onChange={e=>setMealForm(p=>({...p,carbs:e.target.value}))} placeholder="0"/>
+              <input type="number" min="0" value={mealForm.carbs}
+                onChange={e=>{ setBaseNutrition(null); setMealForm(p=>({...p,carbs:e.target.value})); }} placeholder="0"/>
             </div>
             <div className="form-group">
               <label className="form-label" style={{color:'var(--red)'}}>Fat (g)</label>
-              <input type="number" min="0" value={mealForm.fat} onChange={e=>setMealForm(p=>({...p,fat:e.target.value}))} placeholder="0"/>
+              <input type="number" min="0" value={mealForm.fat}
+                onChange={e=>{ setBaseNutrition(null); setMealForm(p=>({...p,fat:e.target.value})); }} placeholder="0"/>
             </div>
           </div>
           <button className="btn btn-primary" onClick={addMeal}>Add Meal</button>
