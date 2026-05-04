@@ -577,8 +577,9 @@ const BarcodeScanner = ({ onResult, onClose }) => {
   const quagRef   = useRef(null);
   const streamRef = useRef(null);
   const rafRef    = useRef(null);
-  const [status, setStatus] = useState('Starting camera…');
-  const [error,  setError]  = useState(null);
+  const [status,     setStatus]     = useState('Starting camera…');
+  const [error,      setError]      = useState(null);
+  const [manualCode, setManualCode] = useState('');
 
   const useNative = 'BarcodeDetector' in window;
 
@@ -623,23 +624,34 @@ const BarcodeScanner = ({ onResult, onClose }) => {
       Quagga.init({
         inputStream: {
           name: 'Live', type: 'LiveStream', target: quagRef.current,
-          constraints: { facingMode: 'environment', aspectRatio:{ ideal:16/9 } },
-          area: { top:'20%', right:'5%', bottom:'20%', left:'5%' },
+          constraints: {
+            facingMode: 'environment',
+            width:  { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720,  max: 1080 },
+          },
+          // no area restriction — scan the full frame for better detection
         },
         decoder: {
           readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader','code_39_reader'],
           multiple: false,
         },
-        locate: true, numOfWorkers: 0,
+        locator: { patchSize: 'medium', halfSample: false },
+        locate: true,
+        numOfWorkers: typeof navigator.hardwareConcurrency === 'number' ? Math.min(navigator.hardwareConcurrency, 2) : 1,
+        frequency: 10,
       }, err => {
         if (cancelled) return;
         if (err) { setError('Could not start camera. ' + (err.message || 'Check camera permission in your browser settings.')); return; }
         Quagga.start();
-        setStatus('Point at a product barcode…');
+        setStatus('Point camera at barcode — keep steady & well lit');
       });
+      // Require 2 consistent reads before firing to reduce false positives
+      const seen = {};
       Quagga.onDetected(result => {
         const code = result.codeResult?.code;
-        if (code && !cancelled) { cancelled = true; Quagga.stop(); setStatus('Found!'); onResult(code); }
+        if (!code || cancelled) return;
+        seen[code] = (seen[code] || 0) + 1;
+        if (seen[code] >= 2) { cancelled = true; Quagga.stop(); setStatus('Found!'); onResult(code); }
       });
       return () => { cancelled = true; try { Quagga.stop(); } catch {} };
 
@@ -667,7 +679,17 @@ const BarcodeScanner = ({ onResult, onClose }) => {
                 </div>
               </div>
               <div style={{textAlign:'center',fontSize:13,color:'var(--text2)',marginBottom:4}}>{status}</div>
-              <div style={{textAlign:'center',fontSize:11,color:'var(--text3)'}}>EAN-13 · UPC · Code 128 · all major formats</div>
+              <div style={{textAlign:'center',fontSize:11,color:'var(--text3)',marginBottom:14}}>EAN-13 · UPC · Code 128 · all major formats</div>
+              <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
+                <div style={{fontSize:11,color:'var(--text3)',marginBottom:8,textAlign:'center'}}>Can't scan? Type the barcode number:</div>
+                <div style={{display:'flex',gap:8}}>
+                  <input type="number" value={manualCode} onChange={e=>setManualCode(e.target.value)}
+                    placeholder="e.g. 8690000000000" style={{flex:1,fontSize:14}}
+                    onKeyDown={e=>e.key==='Enter'&&manualCode.length>=8&&onResult(manualCode)}/>
+                  <button className="btn btn-primary btn-sm" style={{flexShrink:0,whiteSpace:'nowrap'}}
+                    disabled={manualCode.length<8} onClick={()=>onResult(manualCode)}>Look up</button>
+                </div>
+              </div>
             </>}
       </div>
     </div>
@@ -1640,8 +1662,13 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
 
   const saveGoal = () => { const g=parseInt(goalInput)||0; setCalorieGoal(g); save('calorieGoal',g); setShowGoalModal(false); };
 
+  const [barcodeNotice, setBarcodeNotice] = useState('');
   const handleBarcodeScan = async code => {
     setShowScanner(false);
+    setBarcodeNotice('');
+    setShowAddModal(true);
+    setMealForm({ name:'', calories:'', protein:'', carbs:'', fat:'' });
+    setBaseNutrition(null); setPortionInput('1');
     try {
       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
       const data = await res.json();
@@ -1656,13 +1683,15 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
         setBaseNutrition({ cal, p:pro, c:car, f:fat, grams:100 });
         setPortionInput('100');
         setMealForm(prev => ({ ...prev, name:`${name} 100g`, calories:cal, protein:pro, carbs:car, fat }));
-        if (!showAddModal) setShowAddModal(true);
+        setBarcodeNotice('');
       } else {
-        alert(`No product found for barcode ${code}. You can fill in the details manually.`);
-        if (!showAddModal) setShowAddModal(true);
+        // Product not in Open Food Facts — let user fill in manually
+        setMealForm(prev => ({ ...prev, name:`Product ${code}` }));
+        setBarcodeNotice(`Barcode ${code} not found in database — fill in the details below.`);
       }
     } catch {
-      alert('Could not look up the barcode — check your internet connection.');
+      setMealForm(prev => ({ ...prev, name:`Product ${code}` }));
+      setBarcodeNotice('Could not reach the food database — fill in details manually.');
     }
   };
 
@@ -1908,8 +1937,9 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
       {showScanner&&<BarcodeScanner onResult={handleBarcodeScan} onClose={()=>setShowScanner(false)}/>}
 
       {/* Add meal modal */}
-      {showAddModal&&<Modal title={`Add to ${addSlot}`} onClose={()=>setShowAddModal(false)}>
+      {showAddModal&&<Modal title={`Add to ${addSlot}`} onClose={()=>{setShowAddModal(false);setBarcodeNotice('');}}>
         <div className="col">
+          {barcodeNotice&&<div style={{background:'var(--amber-dim)',border:'1px solid var(--amber)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--amber)',lineHeight:1.5}}>{barcodeNotice}</div>}
           <div className="form-group">
             <label className="form-label">Food name</label>
             <FoodSearch value={mealForm.name}
