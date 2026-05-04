@@ -1683,18 +1683,34 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
         const prod = data.product;
         const nut  = prod.nutriments || {};
         const name = [prod.product_name, prod.brands].filter(Boolean).join(' — ') || code;
-        // Some products store energy in kJ only — convert to kcal (÷4.184)
-        const kcal100 = nut['energy-kcal_100g'] ?? nut['energy-kcal'];
-        const kj100   = nut['energy-kj_100g']   ?? nut['energy-kj'] ?? nut['energy_100g'] ?? nut['energy'];
-        const cal = Math.round(kcal100 != null ? kcal100 : (kj100 != null ? kj100 / 4.184 : 0));
-        // Open Food Facts uses both 'proteins' and 'protein' (singular/plural varies by product)
-        const pro = Math.round(nut['proteins_100g'] ?? nut['protein_100g'] ?? nut['proteins'] ?? nut['protein'] ?? 0);
-        const car = Math.round(nut['carbohydrates_100g'] ?? nut['carbohydrates'] ?? 0);
-        const fat = Math.round(nut['fat_100g'] ?? nut['fat'] ?? 0);
+
+        // Scan every possible key Open Food Facts might use for each nutrient
+        const firstPos = (keys) => { for (const k of keys) { if (nut[k] > 0) return nut[k]; } return null; };
+        const scanKeys = (includes, excludes=[]) => {
+          for (const [k,v] of Object.entries(nut)) {
+            if (typeof v !== 'number' || v <= 0) continue;
+            if (excludes.some(x=>k.includes(x))) continue;
+            if (includes.every(x=>k.includes(x))) return v;
+          }
+          return null;
+        };
+
+        // Calories: try kcal keys, then kJ keys (÷4.184), then scan all energy keys
+        const kcalVal = firstPos(['energy-kcal_100g','energy-kcal_serving','energy-kcal']);
+        const kjVal   = firstPos(['energy-kj_100g','energy-kj_serving','energy-kj','energy_100g','energy_serving','energy'])
+                     ?? scanKeys(['energy'],['label','unit','modifier','_unit']);
+        const cal = Math.round(kcalVal ?? (kjVal != null ? kjVal/4.184 : 0));
+
+        // Protein: singular and plural, _100g and bare key
+        const pro = Math.round(firstPos(['proteins_100g','protein_100g','proteins_serving','protein_serving','proteins','protein']) ?? 0);
+        const car = Math.round(firstPos(['carbohydrates_100g','carbohydrates_serving','carbohydrates','carbs_100g','carbs']) ?? 0);
+        const fat = Math.round(firstPos(['fat_100g','fat_serving','fat','lipids_100g','lipids']) ?? 0);
         setBaseNutrition({ cal, p:pro, c:car, f:fat, grams:100 });
         setPortionInput('100');
-        setMealForm(prev => ({ ...prev, name:`${name} 100g`, calories:cal, protein:pro, carbs:car, fat }));
-        setBarcodeNotice('');
+        setMealForm(prev => ({ ...prev, name:`${name} 100g`, calories:cal||'', protein:pro||'', carbs:car||'', fat:fat||'' }));
+        setBarcodeNotice(cal === 0
+          ? `Found: ${name} — but nutrition data is missing from the Open Food Facts database. Check the product label and fill in below.`
+          : '');
       } else {
         // Product not in Open Food Facts — let user fill in manually
         setMealForm(prev => ({ ...prev, name:`Product ${code}` }));
