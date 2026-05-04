@@ -631,34 +631,24 @@ const BarcodeScanner = ({ onResult, onClose }) => {
       Quagga.init({
         inputStream: {
           name: 'Live', type: 'LiveStream', target: quagRef.current,
-          constraints: {
-            facingMode: 'environment',
-            width:  { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720,  max: 1080 },
-          },
-          // no area restriction — scan the full frame for better detection
+          constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         },
         decoder: {
           readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader','code_39_reader'],
-          multiple: false,
         },
-        locator: { patchSize: 'medium', halfSample: false },
+        locator: { patchSize: 'medium', halfSample: true },
         locate: true,
-        numOfWorkers: typeof navigator.hardwareConcurrency === 'number' ? Math.min(navigator.hardwareConcurrency, 2) : 1,
-        frequency: 10,
+        numOfWorkers: 0,
+        frequency: 8,
       }, err => {
         if (cancelled) return;
         if (err) { setError('Could not start camera. ' + (err.message || 'Check camera permission in your browser settings.')); return; }
         Quagga.start();
         setStatus('Point camera at barcode — keep steady & well lit');
       });
-      // Require 2 consistent reads before firing to reduce false positives
-      const seen = {};
       Quagga.onDetected(result => {
         const code = result.codeResult?.code;
-        if (!code || cancelled) return;
-        seen[code] = (seen[code] || 0) + 1;
-        if (seen[code] >= 2) { cancelled = true; Quagga.stop(); setStatus('Found!'); onResult(code); }
+        if (code && !cancelled) { cancelled = true; Quagga.stop(); setStatus('Found!'); onResult(code); }
       });
       return () => { cancelled = true; try { Quagga.stop(); } catch {} };
 
