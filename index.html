@@ -321,17 +321,24 @@ const FoodSearch = ({ value, onChange, onSelect, onKeyDown, autoFocus, onScanCli
         try {
           const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(v)}&json=1&page_size=6&fields=product_name,brands,nutriments`, { signal: AbortSignal.timeout(5000) });
           const data = await res.json();
+          const parseNut = nut => {
+            const kcal100 = nut['energy-kcal_100g'] ?? nut['energy-kcal'];
+            const kj100   = nut['energy-kj_100g']   ?? nut['energy-kj'] ?? nut['energy_100g'] ?? nut['energy'];
+            return {
+              cal: Math.round(kcal100 != null ? kcal100 : (kj100 != null ? kj100 / 4.184 : 0)),
+              p:   Math.round(nut['proteins_100g'] ?? nut['protein_100g'] ?? nut['proteins'] ?? nut['protein'] ?? 0),
+              c:   Math.round(nut['carbohydrates_100g'] ?? nut['carbohydrates'] ?? 0),
+              f:   Math.round(nut['fat_100g'] ?? nut['fat'] ?? 0),
+            };
+          };
           const results = (data.products || [])
-            .filter(p => p.product_name && p.nutriments && (p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal']))
+            .filter(p => p.product_name && p.nutriments)
             .slice(0, 6)
-            .map(p => ({
-              name: [p.product_name, p.brands].filter(Boolean).join(' — '),
-              cal:  Math.round(p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal'] || 0),
-              p:    Math.round(p.nutriments['proteins_100g']      || 0),
-              c:    Math.round(p.nutriments['carbohydrates_100g'] || 0),
-              f:    Math.round(p.nutriments['fat_100g']           || 0),
-              fromApi: true,
-            }));
+            .map(p => {
+              const { cal, p: pro, c, f } = parseNut(p.nutriments);
+              return { name:[p.product_name, p.brands].filter(Boolean).join(' — '), cal, p:pro, c, f, fromApi:true };
+            })
+            .filter(p => p.cal > 0);
           setApiResults(results);
           if (results.length > 0 || local.length > 0) setOpen(true);
         } catch { /* network error — silent */ }
@@ -1676,10 +1683,14 @@ const FoodSection = ({ meals, setMeals, favMeals, setFavMeals, calorieGoal, setC
         const prod = data.product;
         const nut  = prod.nutriments || {};
         const name = [prod.product_name, prod.brands].filter(Boolean).join(' — ') || code;
-        const cal  = Math.round(nut['energy-kcal_100g'] || nut['energy-kcal'] || 0);
-        const pro  = Math.round(nut['proteins_100g']      || 0);
-        const car  = Math.round(nut['carbohydrates_100g'] || 0);
-        const fat  = Math.round(nut['fat_100g']           || 0);
+        // Some products store energy in kJ only — convert to kcal (÷4.184)
+        const kcal100 = nut['energy-kcal_100g'] ?? nut['energy-kcal'];
+        const kj100   = nut['energy-kj_100g']   ?? nut['energy-kj'] ?? nut['energy_100g'] ?? nut['energy'];
+        const cal = Math.round(kcal100 != null ? kcal100 : (kj100 != null ? kj100 / 4.184 : 0));
+        // Open Food Facts uses both 'proteins' and 'protein' (singular/plural varies by product)
+        const pro = Math.round(nut['proteins_100g'] ?? nut['protein_100g'] ?? nut['proteins'] ?? nut['protein'] ?? 0);
+        const car = Math.round(nut['carbohydrates_100g'] ?? nut['carbohydrates'] ?? 0);
+        const fat = Math.round(nut['fat_100g'] ?? nut['fat'] ?? 0);
         setBaseNutrition({ cal, p:pro, c:car, f:fat, grams:100 });
         setPortionInput('100');
         setMealForm(prev => ({ ...prev, name:`${name} 100g`, calories:cal, protein:pro, carbs:car, fat }));
